@@ -27,8 +27,7 @@ actor {
   type OldAppUser = { mobileNumber : Text; role : Text };
   type OldUserProfile = { name : Text };
 
-  // Keep old stable variables to allow upgrade without data loss errors.
-  // These are from the previous version and are intentionally unused.
+  // Legacy stable variables retained for upgrade compatibility -- do not remove.
   let accessControlState = AccessControl.initState();
   let appUsers = Map.empty<Nat, OldAppUser>();
   stable var appUserIdCounter : Nat = 0;

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { ClipboardList, Settings, Users } from "lucide-react";
 import { useState } from "react";
 import { Sidebar } from "./components/Sidebar";
+import { useGetAllCustomers } from "./hooks/useQueries";
 import { CustomerListPage } from "./pages/CustomerListPage";
 import { EntryFormPage } from "./pages/EntryFormPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -33,6 +34,8 @@ export { navItems };
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("entry");
   const [editData, setEditData] = useState<EditCustomerData | null>(null);
+  const { data: customers } = useGetAllCustomers();
+  const customerCount = customers?.length ?? 0;
 
   const handleEditCustomer = (data: EditCustomerData) => {
     setEditData(data);
@@ -53,6 +56,7 @@ export default function App() {
         currentPage={currentPage}
         onPageChange={handlePageChange}
         navItems={navItems}
+        customerCount={customerCount}
       />
       <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
         {currentPage === "entry" && (
@@ -80,11 +84,24 @@ export default function App() {
                 data-ocid={`nav.${item.id}.link`}
                 onClick={() => handlePageChange(item.id)}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors",
+                  "flex flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium transition-colors relative",
                   isActive ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <div className="relative">
+                  <Icon className="h-5 w-5" />
+                  {item.id === "customers" && customerCount > 0 && (
+                    <span
+                      className="absolute -top-1.5 -right-2 text-[10px] font-bold rounded-full px-1 leading-none min-w-[1rem] h-4 flex items-center justify-center"
+                      style={{
+                        background: "oklch(0.72 0.18 55)",
+                        color: "oklch(0.15 0.03 50)",
+                      }}
+                    >
+                      {customerCount}
+                    </span>
+                  )}
+                </div>
                 {item.label}
               </button>
             );

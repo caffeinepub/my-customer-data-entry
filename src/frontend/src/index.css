@@ -14,55 +14,55 @@
   :root {
     --radius: 0.5rem;
 
-    /* Page background: light cool gray #F3F5F8 */
-    --background: 0.96 0.008 240;
-    --foreground: 0.18 0.02 264;
+    /* Page background: warm cream */
+    --background: 0.97 0.012 80;
+    --foreground: 0.18 0.03 50;
 
-    /* Card: white */
+    /* Card: white with warm tint */
     --card: 1 0 0;
-    --card-foreground: 0.18 0.02 264;
+    --card-foreground: 0.18 0.03 50;
 
     --popover: 1 0 0;
-    --popover-foreground: 0.18 0.02 264;
+    --popover-foreground: 0.18 0.03 50;
 
-    /* Primary accent blue #0B74D1 */
-    --primary: 0.51 0.18 250;
-    --primary-foreground: 1 0 0;
+    /* Primary: warm amber/orange */
+    --primary: 0.72 0.18 55;
+    --primary-foreground: 0.15 0.03 50;
 
-    /* Secondary: light gray with border */
-    --secondary: 0.97 0.005 240;
-    --secondary-foreground: 0.18 0.02 264;
+    /* Secondary: light warm gray */
+    --secondary: 0.96 0.01 75;
+    --secondary-foreground: 0.18 0.03 50;
 
-    --muted: 0.95 0.008 240;
-    --muted-foreground: 0.44 0.03 264;
+    --muted: 0.94 0.015 75;
+    --muted-foreground: 0.48 0.04 60;
 
-    --accent: 0.94 0.015 240;
-    --accent-foreground: 0.18 0.02 264;
+    --accent: 0.93 0.025 70;
+    --accent-foreground: 0.18 0.03 50;
 
     --destructive: 0.577 0.245 27.325;
     --destructive-foreground: 1 0 0;
 
-    /* Borders: #D1D5DB */
-    --border: 0.83 0.01 264;
-    --input: 0.83 0.01 264;
-    --ring: 0.51 0.18 250;
+    /* Borders */
+    --border: 0.86 0.02 70;
+    --input: 0.86 0.02 70;
+    --ring: 0.72 0.18 55;
 
-    --chart-1: 0.646 0.222 41.116;
-    --chart-2: 0.6 0.118 184.704;
-    --chart-3: 0.398 0.07 227.392;
-    --chart-4: 0.828 0.189 84.429;
-    --chart-5: 0.769 0.188 70.08;
+    --chart-1: 0.72 0.18 55;
+    --chart-2: 0.65 0.16 40;
+    --chart-3: 0.78 0.14 80;
+    --chart-4: 0.6 0.2 30;
+    --chart-5: 0.82 0.12 90;
 
-    /* Sidebar: dark navy #0B1624 to #0E2235 */
-    --sidebar: 0.14 0.04 230;
-    --sidebar-foreground: 0.92 0.015 220;
-    --sidebar-primary: 0.51 0.18 250;
-    --sidebar-primary-foreground: 1 0 0;
-    /* Active item: dark slate pill #2B3A4A */
-    --sidebar-accent: 0.27 0.04 228;
-    --sidebar-accent-foreground: 0.95 0.015 220;
-    --sidebar-border: 0.22 0.04 230;
-    --sidebar-ring: 0.51 0.18 250;
+    /* Sidebar: deep warm amber-brown */
+    --sidebar: 0.22 0.05 50;
+    --sidebar-foreground: 0.93 0.02 70;
+    --sidebar-primary: 0.72 0.18 55;
+    --sidebar-primary-foreground: 0.15 0.03 50;
+    /* Active item */
+    --sidebar-accent: 0.32 0.06 52;
+    --sidebar-accent-foreground: 0.95 0.02 70;
+    --sidebar-border: 0.28 0.05 52;
+    --sidebar-ring: 0.72 0.18 55;
   }
 
   * {

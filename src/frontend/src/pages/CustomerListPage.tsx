@@ -295,6 +295,26 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
         )}
       </div>
 
+      {/* Customer count stat */}
+      {!isLoading && !isError && customers && customers.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 px-1">
+          <div className="flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2">
+            <Users className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold text-primary">
+              {customers.length}
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {customers.length === 1 ? "customer" : "customers"} total
+            </span>
+            {searchQuery && filteredCustomers.length !== customers.length && (
+              <span className="text-xs text-muted-foreground ml-1">
+                ({filteredCustomers.length} shown)
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {isLoading && (
         <div data-ocid="customers.loading_state" className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
@@ -354,12 +374,6 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
 
       {!isLoading && filteredCustomers.length > 0 && (
         <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-          {searchQuery && (
-            <div className="px-4 py-2 border-b border-border bg-muted/30 text-xs text-muted-foreground">
-              Showing {filteredCustomers.length} of {customers?.length}{" "}
-              customer(s)
-            </div>
-          )}
           {/* Horizontal scroll wrapper */}
           <div className="overflow-x-auto">
             <Table className="min-w-[600px]">
