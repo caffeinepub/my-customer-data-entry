@@ -53,16 +53,16 @@
     --chart-4: 0.6 0.2 30;
     --chart-5: 0.82 0.12 90;
 
-    /* Sidebar: deep warm amber-brown */
-    --sidebar: 0.22 0.05 50;
-    --sidebar-foreground: 0.93 0.02 70;
-    --sidebar-primary: 0.72 0.18 55;
-    --sidebar-primary-foreground: 0.15 0.03 50;
+    /* Sidebar: vibrant orange-to-yellow gradient */
+    --sidebar: 0.57 0.19 50;
+    --sidebar-foreground: 0.98 0.02 85;
+    --sidebar-primary: 0.95 0.18 90;
+    --sidebar-primary-foreground: 0.35 0.12 45;
     /* Active item */
-    --sidebar-accent: 0.32 0.06 52;
-    --sidebar-accent-foreground: 0.95 0.02 70;
-    --sidebar-border: 0.28 0.05 52;
-    --sidebar-ring: 0.72 0.18 55;
+    --sidebar-accent: 0.9 0.18 85 / 0.3;
+    --sidebar-accent-foreground: 0.99 0.02 90;
+    --sidebar-border: 0.7 0.16 65 / 0.4;
+    --sidebar-ring: 0.95 0.18 90;
   }
 
   * {

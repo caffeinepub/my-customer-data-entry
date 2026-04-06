@@ -25,21 +25,32 @@ export function Sidebar({
       className="hidden md:flex w-[264px] flex-shrink-0 flex-col h-screen"
       style={{
         background:
-          "linear-gradient(180deg, oklch(0.20 0.05 50) 0%, oklch(0.25 0.06 48) 100%)",
+          "linear-gradient(180deg, oklch(0.52 0.18 50) 0%, oklch(0.62 0.20 70) 100%)",
       }}
     >
       {/* Brand */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-border">
+      <div
+        className="flex items-center gap-3 px-6 py-5"
+        style={{ borderBottom: "1px solid oklch(0.70 0.16 65 / 0.4)" }}
+      >
         <div
           className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
           style={{
             background:
-              "linear-gradient(135deg, oklch(0.80 0.18 70), oklch(0.65 0.20 40))",
+              "linear-gradient(135deg, oklch(0.95 0.18 90), oklch(0.85 0.22 60))",
           }}
         >
-          <span className="text-white text-lg font-bold leading-none">C</span>
+          <span
+            className="text-lg font-bold leading-none"
+            style={{ color: "oklch(0.35 0.12 40)" }}
+          >
+            C
+          </span>
         </div>
-        <span className="text-sidebar-foreground text-lg font-semibold tracking-tight">
+        <span
+          className="text-lg font-semibold tracking-tight"
+          style={{ color: "oklch(0.98 0.02 85)" }}
+        >
           CustomerHub
         </span>
       </div>
@@ -49,6 +60,9 @@ export function Sidebar({
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
+          const iconColor = isActive
+            ? "oklch(0.95 0.18 88)"
+            : "oklch(0.92 0.12 80 / 0.85)";
           return (
             <button
               type="button"
@@ -57,19 +71,45 @@ export function Sidebar({
               onClick={() => onPageChange(item.id)}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
               )}
+              style={{
+                background: isActive
+                  ? "oklch(0.90 0.18 85 / 0.30)"
+                  : "transparent",
+                color: isActive
+                  ? "oklch(0.99 0.02 90)"
+                  : "oklch(0.96 0.03 80 / 0.80)",
+                outline: isActive
+                  ? "1.5px solid oklch(0.90 0.18 85 / 0.50)"
+                  : "none",
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    "oklch(0.90 0.14 80 / 0.18)";
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "oklch(0.99 0.02 90)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLButtonElement).style.background =
+                    "transparent";
+                  (e.currentTarget as HTMLButtonElement).style.color =
+                    "oklch(0.96 0.03 80 / 0.80)";
+                }
+              }}
             >
-              <Icon className={cn("h-4 w-4", isActive ? "text-primary" : "")} />
+              <span style={{ color: iconColor, display: "contents" }}>
+                <Icon className="h-4 w-4 flex-shrink-0" />
+              </span>
               {item.label}
               {item.id === "customers" && customerCount > 0 && (
                 <span
                   className="ml-auto text-xs font-bold rounded-full px-1.5 py-0.5 leading-none min-w-[1.25rem] text-center"
                   style={{
-                    background: "oklch(0.72 0.18 55)",
-                    color: "oklch(0.15 0.03 50)",
+                    background: "oklch(0.95 0.18 90)",
+                    color: "oklch(0.35 0.12 45)",
                   }}
                 >
                   {customerCount}
