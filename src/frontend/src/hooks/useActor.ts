@@ -9,7 +9,7 @@ export function useActor() {
   const actorQuery = useQuery<backendInterface>({
     queryKey: [ACTOR_QUERY_KEY],
     queryFn: async () => {
-      // Always connect anonymously -- no identity or access control needed
+      // Always connect anonymously -- no access control, no identity setup
       return await createActorWithConfig();
     },
     staleTime: Number.POSITIVE_INFINITY,
