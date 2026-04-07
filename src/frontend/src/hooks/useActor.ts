@@ -9,12 +9,14 @@ export function useActor() {
   const actorQuery = useQuery<backendInterface>({
     queryKey: [ACTOR_QUERY_KEY],
     queryFn: async () => {
+      // Always connect anonymously -- no access control in this app
       return await createActorWithConfig();
     },
     staleTime: Number.POSITIVE_INFINITY,
     enabled: true,
   });
 
+  // When the actor changes, invalidate dependent queries
   useEffect(() => {
     if (actorQuery.data) {
       queryClient.invalidateQueries({
