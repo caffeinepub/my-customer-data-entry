@@ -24,14 +24,20 @@ export interface CustomerWithId {
   'ghRga' : string,
   'address' : string,
 }
+export interface TagOption {
+  'tagLabel' : string,
+  'tagColor' : string,
+}
 export interface _SERVICE {
   'addCustomer' : ActorMethod<[Customer], bigint>,
   'deleteCustomer' : ActorMethod<[bigint], undefined>,
   'getAllCustomers' : ActorMethod<[], Array<CustomerWithId>>,
   'getCustomer' : ActorMethod<[bigint], Customer>,
   'getSettings' : ActorMethod<[], Array<string>>,
+  'getTagOptions' : ActorMethod<[], Array<TagOption>>,
   'updateCustomer' : ActorMethod<[bigint, Customer], undefined>,
   'updateSettings' : ActorMethod<[Array<string>], undefined>,
+  'updateTagOptions' : ActorMethod<[Array<TagOption>], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

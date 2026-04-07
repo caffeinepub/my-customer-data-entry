@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Customer } from "../backend.d.ts";
+import type { Customer, TagOption } from "../backend";
 import { useActor } from "./useActor";
 
 export interface CustomerWithId extends Customer {
   id: number;
 }
+
+export type { TagOption };
 
 // ─── Customer Queries ────────────────────────────────────────────────────────
 
@@ -31,6 +33,28 @@ export function useGetSettings() {
       return settings.length > 0
         ? settings
         : ["GH", "RGA", "CLOSE", "NOT INTERESTED"];
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetTagOptions() {
+  const { actor, isFetching } = useActor();
+  return useQuery<TagOption[]>({
+    queryKey: ["tagOptions"],
+    queryFn: async () => {
+      if (!actor)
+        return [
+          { tagLabel: "Purple", tagColor: "purple" },
+          { tagLabel: "Regular", tagColor: "default" },
+        ];
+      const opts = await actor.getTagOptions();
+      return opts.length > 0
+        ? opts
+        : [
+            { tagLabel: "Purple", tagColor: "purple" },
+            { tagLabel: "Regular", tagColor: "default" },
+          ];
     },
     enabled: !!actor && !isFetching,
   });
@@ -91,6 +115,20 @@ export function useUpdateSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+}
+
+export function useUpdateTagOptions() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (newOptions: TagOption[]) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.updateTagOptions(newOptions);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tagOptions"] });
     },
   });
 }

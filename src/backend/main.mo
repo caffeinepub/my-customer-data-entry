@@ -24,6 +24,11 @@ actor {
     address : Text;
   };
 
+  type TagOption = {
+    tagLabel : Text;
+    tagColor : Text;
+  };
+
   type OldAppUser = { mobileNumber : Text; role : Text };
   type OldUserProfile = { name : Text };
 
@@ -39,6 +44,10 @@ actor {
 
   let customers = Map.empty<Nat, Customer>();
   let settings = List.fromArray(["GH", "RGA", "CLOSE", "NOT INTERESTED"]);
+  let tagOptions = List.fromArray<TagOption>([
+    { tagLabel = "Purple"; tagColor = "purple" },
+    { tagLabel = "Regular"; tagColor = "default" },
+  ]);
   var customerIdCounter = 0;
 
   // Customer CRUD operations
@@ -77,7 +86,7 @@ actor {
     withIds.sort(compareCustomerWithId);
   };
 
-  // Settings operations
+  // Settings (GH/RGA) operations
   public shared ({ caller = _ }) func updateSettings(newSettings : [Text]) : async () {
     settings.clear();
     for (setting in newSettings.values()) {
@@ -87,5 +96,17 @@ actor {
 
   public query ({ caller = _ }) func getSettings() : async [Text] {
     settings.toArray();
+  };
+
+  // Tag options operations
+  public shared ({ caller = _ }) func updateTagOptions(newOptions : [TagOption]) : async () {
+    tagOptions.clear();
+    for (opt in newOptions.values()) {
+      tagOptions.add(opt);
+    };
+  };
+
+  public query ({ caller = _ }) func getTagOptions() : async [TagOption] {
+    tagOptions.toArray();
   };
 };

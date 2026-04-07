@@ -23,6 +23,10 @@ export const CustomerWithId = IDL.Record({
   'ghRga' : IDL.Text,
   'address' : IDL.Text,
 });
+export const TagOption = IDL.Record({
+  'tagLabel' : IDL.Text,
+  'tagColor' : IDL.Text,
+});
 
 export const idlService = IDL.Service({
   'addCustomer' : IDL.Func([Customer], [IDL.Nat], []),
@@ -30,8 +34,10 @@ export const idlService = IDL.Service({
   'getAllCustomers' : IDL.Func([], [IDL.Vec(CustomerWithId)], ['query']),
   'getCustomer' : IDL.Func([IDL.Nat], [Customer], ['query']),
   'getSettings' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+  'getTagOptions' : IDL.Func([], [IDL.Vec(TagOption)], ['query']),
   'updateCustomer' : IDL.Func([IDL.Nat, Customer], [], []),
   'updateSettings' : IDL.Func([IDL.Vec(IDL.Text)], [], []),
+  'updateTagOptions' : IDL.Func([IDL.Vec(TagOption)], [], []),
 });
 
 export const idlInitArgs = [];
@@ -52,14 +58,20 @@ export const idlFactory = ({ IDL }) => {
     'ghRga' : IDL.Text,
     'address' : IDL.Text,
   });
+  const TagOption = IDL.Record({
+    'tagLabel' : IDL.Text,
+    'tagColor' : IDL.Text,
+  });
   return IDL.Service({
     'addCustomer' : IDL.Func([Customer], [IDL.Nat], []),
     'deleteCustomer' : IDL.Func([IDL.Nat], [], []),
     'getAllCustomers' : IDL.Func([], [IDL.Vec(CustomerWithId)], ['query']),
     'getCustomer' : IDL.Func([IDL.Nat], [Customer], ['query']),
     'getSettings' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+    'getTagOptions' : IDL.Func([], [IDL.Vec(TagOption)], ['query']),
     'updateCustomer' : IDL.Func([IDL.Nat, Customer], [], []),
     'updateSettings' : IDL.Func([IDL.Vec(IDL.Text)], [], []),
+    'updateTagOptions' : IDL.Func([IDL.Vec(TagOption)], [], []),
   });
 };
 

@@ -12,12 +12,6 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-function some<T>(value: T): Some<T> {
-    return { __kind__: "Some", value };
-}
-function none(): None {
-    return { __kind__: "None" };
-}
 export class ExternalBlob {
     _blob?: Uint8Array<ArrayBuffer> | null;
     directURL: string;
@@ -61,14 +55,20 @@ export interface CustomerWithId {
     ghRga: string;
     address: string;
 }
+export interface TagOption {
+    tagLabel: string;
+    tagColor: string;
+}
 export interface backendInterface {
     addCustomer(customer: Customer): Promise<bigint>;
     deleteCustomer(id: bigint): Promise<void>;
     getAllCustomers(): Promise<Array<CustomerWithId>>;
     getCustomer(id: bigint): Promise<Customer>;
     getSettings(): Promise<Array<string>>;
+    getTagOptions(): Promise<Array<TagOption>>;
     updateCustomer(id: bigint, customer: Customer): Promise<void>;
     updateSettings(newSettings: Array<string>): Promise<void>;
+    updateTagOptions(newOptions: Array<TagOption>): Promise<void>;
 }
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
@@ -102,6 +102,12 @@ export class Backend implements backendInterface {
         }
         return await this.actor.getSettings();
     }
+    async getTagOptions(): Promise<Array<TagOption>> {
+        if (this.processError) {
+            try { return await this.actor.getTagOptions(); } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        }
+        return await this.actor.getTagOptions();
+    }
     async updateCustomer(arg0: bigint, arg1: Customer): Promise<void> {
         if (this.processError) {
             try { return await this.actor.updateCustomer(arg0, arg1); } catch (e) { this.processError(e); throw new Error("unreachable"); }
@@ -113,6 +119,12 @@ export class Backend implements backendInterface {
             try { return await this.actor.updateSettings(arg0); } catch (e) { this.processError(e); throw new Error("unreachable"); }
         }
         return await this.actor.updateSettings(arg0);
+    }
+    async updateTagOptions(arg0: Array<TagOption>): Promise<void> {
+        if (this.processError) {
+            try { return await this.actor.updateTagOptions(arg0); } catch (e) { this.processError(e); throw new Error("unreachable"); }
+        }
+        return await this.actor.updateTagOptions(arg0);
     }
 }
 export interface CreateActorOptions {

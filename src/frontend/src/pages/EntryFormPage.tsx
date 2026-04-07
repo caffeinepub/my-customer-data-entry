@@ -18,8 +18,20 @@ import { PageShell } from "../components/PageShell";
 import {
   useAddCustomer,
   useGetSettings,
+  useGetTagOptions,
   useUpdateCustomer,
 } from "../hooks/useQueries";
+
+const COLOR_CLASS_MAP: Record<string, string> = {
+  purple: "bg-purple-100 text-purple-700 border-purple-200",
+  default: "bg-gray-100 text-gray-700 border-gray-200",
+  blue: "bg-blue-100 text-blue-700 border-blue-200",
+  green: "bg-green-100 text-green-700 border-green-200",
+  red: "bg-red-100 text-red-600 border-red-200",
+  orange: "bg-orange-100 text-orange-700 border-orange-200",
+  yellow: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  pink: "bg-pink-100 text-pink-700 border-pink-200",
+};
 
 interface EntryFormPageProps {
   editData: EditCustomerData | null;
@@ -43,10 +55,20 @@ export function EntryFormPage({
   const formRef = useRef<HTMLDivElement>(null);
 
   const { data: settingsOptions } = useGetSettings();
+  const { data: tagOptions } = useGetTagOptions();
+
   const ghRgaOptions =
     settingsOptions && settingsOptions.length > 0
       ? settingsOptions
       : ["GH", "RGA", "CLOSE", "NOT INTERESTED"];
+
+  const resolvedTagOptions =
+    tagOptions && tagOptions.length > 0
+      ? tagOptions
+      : [
+          { tagLabel: "Purple", tagColor: "purple" },
+          { tagLabel: "Regular", tagColor: "default" },
+        ];
 
   const addCustomer = useAddCustomer();
   const updateCustomer = useUpdateCustomer();
@@ -54,7 +76,6 @@ export function EntryFormPage({
   const isEditing = editData !== null;
   const isPending = addCustomer.isPending || updateCustomer.isPending;
 
-  // Pre-fill form when editing
   useEffect(() => {
     if (editData) {
       setForm({
@@ -92,7 +113,7 @@ export function EntryFormPage({
     const customerData = {
       name: form.name.trim(),
       mobileNumber: form.mobileNumber.trim(),
-      tag: form.tag.trim(),
+      tag: form.tag,
       ghRga: form.ghRga,
       address: form.address.trim(),
     };
@@ -129,6 +150,11 @@ export function EntryFormPage({
     if (isEditing) onEditComplete();
     formRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  const selectedTagOption = resolvedTagOptions.find(
+    (t) => t.tagLabel === form.tag,
+  );
+  const selectedTagColor = selectedTagOption?.tagColor ?? "default";
 
   return (
     <PageShell
@@ -227,7 +253,7 @@ export function EntryFormPage({
                   )}
                 </div>
 
-                {/* Tag */}
+                {/* Tag Dropdown */}
                 <div className="space-y-1.5">
                   <Label
                     htmlFor="tag"
@@ -238,16 +264,53 @@ export function EntryFormPage({
                       (optional)
                     </span>
                   </Label>
-                  <Input
-                    id="tag"
-                    data-ocid="entry.tag.input"
-                    placeholder="Add a tag"
+                  <Select
                     value={form.tag}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, tag: e.target.value }))
+                    onValueChange={(val) =>
+                      setForm((p) => ({
+                        ...p,
+                        tag: val === "__none__" ? "" : val,
+                      }))
                     }
-                    className="h-11"
-                  />
+                  >
+                    <SelectTrigger
+                      id="tag"
+                      data-ocid="entry.tag.select"
+                      className="h-11"
+                    >
+                      {form.tag ? (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
+                            COLOR_CLASS_MAP[selectedTagColor] ??
+                            COLOR_CLASS_MAP.default
+                          }`}
+                        >
+                          {form.tag}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          Select a tag
+                        </span>
+                      )}
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        <span className="text-muted-foreground">None</span>
+                      </SelectItem>
+                      {resolvedTagOptions.map((opt) => (
+                        <SelectItem key={opt.tagLabel} value={opt.tagLabel}>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
+                              COLOR_CLASS_MAP[opt.tagColor] ??
+                              COLOR_CLASS_MAP.default
+                            }`}
+                          >
+                            {opt.tagLabel}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* GH/RGA Dropdown */}
@@ -281,7 +344,7 @@ export function EntryFormPage({
                   </Select>
                 </div>
 
-                {/* Address — full width */}
+                {/* Address */}
                 <div className="space-y-1.5 md:col-span-2">
                   <Label
                     htmlFor="address"
@@ -313,7 +376,7 @@ export function EntryFormPage({
                 >
                   {isPending ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       {isEditing ? "Updating..." : "Saving..."}
                     </>
                   ) : isEditing ? (
