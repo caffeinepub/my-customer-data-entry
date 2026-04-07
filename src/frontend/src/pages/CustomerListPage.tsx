@@ -18,6 +18,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -32,6 +39,7 @@ import "jspdf-autotable";
 import {
   Edit,
   FileDown,
+  Filter,
   Loader2,
   MapPin,
   Phone,
@@ -51,6 +59,8 @@ import {
   useAddCustomer,
   useDeleteCustomer,
   useGetAllCustomers,
+  useGetSettings,
+  useGetTagOptions,
 } from "../hooks/useQueries";
 import type { CustomerWithId } from "../hooks/useQueries";
 
@@ -63,6 +73,31 @@ declare module "jspdf" {
 
 interface CustomerListPageProps {
   onEditCustomer: (data: EditCustomerData) => void;
+}
+
+const COLOR_CLASS_MAP: Record<string, string> = {
+  purple: "bg-purple-100 text-purple-700 border-purple-200",
+  default: "bg-gray-100 text-gray-700 border-gray-200",
+  blue: "bg-blue-100 text-blue-700 border-blue-200",
+  green: "bg-green-100 text-green-700 border-green-200",
+  red: "bg-red-100 text-red-600 border-red-200",
+  orange: "bg-orange-100 text-orange-700 border-orange-200",
+  yellow: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  pink: "bg-pink-100 text-pink-700 border-pink-200",
+};
+
+function TagBadge({
+  tagLabel,
+  tagColor,
+}: { tagLabel: string; tagColor: string }) {
+  const cls = COLOR_CLASS_MAP[tagColor] ?? COLOR_CLASS_MAP.default;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}
+    >
+      {tagLabel}
+    </span>
+  );
 }
 
 function GhRgaBadge({ value }: { value: string }) {
@@ -84,10 +119,14 @@ function GhRgaBadge({ value }: { value: string }) {
 
 export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
   const { data: customers, isLoading, isError } = useGetAllCustomers();
+  const { data: tagOpts } = useGetTagOptions();
+  const { data: ghRgaOpts } = useGetSettings();
   const deleteCustomer = useDeleteCustomer();
   const addCustomer = useAddCustomer();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [ghRgaFilter, setGhRgaFilter] = useState("all");
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerWithId | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CustomerWithId | null>(null);
@@ -99,16 +138,36 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredCustomers = (customers ?? []).filter((c) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      c.mobileNumber.toLowerCase().includes(q) ||
-      c.tag.toLowerCase().includes(q) ||
-      c.ghRga.toLowerCase().includes(q) ||
-      c.address.toLowerCase().includes(q)
-    );
+    // Text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        c.name.toLowerCase().includes(q) ||
+        c.mobileNumber.toLowerCase().includes(q) ||
+        c.tag.toLowerCase().includes(q) ||
+        c.ghRga.toLowerCase().includes(q) ||
+        c.address.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+    }
+    // Tag filter
+    if (tagFilter !== "all" && c.tag !== tagFilter) return false;
+    // GH/RGA filter
+    if (ghRgaFilter !== "all" && c.ghRga !== ghRgaFilter) return false;
+    return true;
   });
+
+  const hasActiveFilters = tagFilter !== "all" || ghRgaFilter !== "all";
+
+  const clearFilters = () => {
+    setTagFilter("all");
+    setGhRgaFilter("all");
+  };
+
+  // Derive tag color from tagOpts for display in table
+  const getTagColor = (tagLabel: string): string => {
+    const found = (tagOpts ?? []).find((t) => t.tagLabel === tagLabel);
+    return found?.tagColor ?? "default";
+  };
 
   const exportPDF = () => {
     const list = customers ?? [];
@@ -273,7 +332,7 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
       </div>
 
       {/* Search Bar */}
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           data-ocid="customers.search_input"
@@ -295,6 +354,68 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
         )}
       </div>
 
+      {/* TAG and GH/RGA Filters */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Filter className="h-4 w-4" />
+          <span>Filter:</span>
+        </div>
+
+        {/* Tag Filter */}
+        <Select value={tagFilter} onValueChange={setTagFilter}>
+          <SelectTrigger
+            data-ocid="customers.tag_filter"
+            className="h-9 w-40 text-sm"
+          >
+            <Tag className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
+            <SelectValue placeholder="All Tags" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Tags</SelectItem>
+            {(tagOpts ?? []).map((opt) => (
+              <SelectItem key={opt.tagLabel} value={opt.tagLabel}>
+                <div className="flex items-center gap-1.5">
+                  <TagBadge tagLabel={opt.tagLabel} tagColor={opt.tagColor} />
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* GH/RGA Filter */}
+        <Select value={ghRgaFilter} onValueChange={setGhRgaFilter}>
+          <SelectTrigger
+            data-ocid="customers.ghrga_filter"
+            className="h-9 w-44 text-sm"
+          >
+            <SelectValue placeholder="All GH/RGA" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All GH/RGA</SelectItem>
+            {(ghRgaOpts ?? ["GH", "RGA", "CLOSE", "NOT INTERESTED"]).map(
+              (opt) => (
+                <SelectItem key={opt} value={opt}>
+                  <GhRgaBadge value={opt} />
+                </SelectItem>
+              ),
+            )}
+          </SelectContent>
+        </Select>
+
+        {/* Clear filters button */}
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 gap-1.5 text-muted-foreground hover:text-foreground"
+            onClick={clearFilters}
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear filters
+          </Button>
+        )}
+      </div>
+
       {/* Customer count stat */}
       {!isLoading && !isError && customers && customers.length > 0 && (
         <div className="flex items-center gap-2 mb-3 px-1">
@@ -306,11 +427,12 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
             <span className="text-sm text-muted-foreground">
               {customers.length === 1 ? "customer" : "customers"} total
             </span>
-            {searchQuery && filteredCustomers.length !== customers.length && (
-              <span className="text-xs text-muted-foreground ml-1">
-                ({filteredCustomers.length} shown)
-              </span>
-            )}
+            {(searchQuery || hasActiveFilters) &&
+              filteredCustomers.length !== customers.length && (
+                <span className="text-xs text-muted-foreground ml-1">
+                  ({filteredCustomers.length} shown)
+                </span>
+              )}
           </div>
         </div>
       )}
@@ -354,7 +476,7 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
         !isError &&
         customers &&
         customers.length > 0 &&
-        searchQuery &&
+        (searchQuery || hasActiveFilters) &&
         filteredCustomers.length === 0 && (
           <div
             data-ocid="customers.no_results_state"
@@ -366,7 +488,7 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
                 No results found
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                No customers match "{searchQuery}". Try a different search.
+                Try adjusting your search or filters.
               </p>
             </div>
           </div>
@@ -412,9 +534,10 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
                     </TableCell>
                     <TableCell>
                       {customer.tag ? (
-                        <Badge variant="secondary" className="text-xs">
-                          {customer.tag}
-                        </Badge>
+                        <TagBadge
+                          tagLabel={customer.tag}
+                          tagColor={getTagColor(customer.tag)}
+                        />
                       ) : (
                         <span className="text-muted-foreground text-sm">—</span>
                       )}
@@ -477,9 +600,14 @@ export function CustomerListPage({ onEditCustomer }: CustomerListPageProps) {
                     <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">
                       Tag
                     </p>
-                    <p className="text-sm text-foreground">
-                      {selectedCustomer.tag || "—"}
-                    </p>
+                    {selectedCustomer.tag ? (
+                      <TagBadge
+                        tagLabel={selectedCustomer.tag}
+                        tagColor={getTagColor(selectedCustomer.tag)}
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
                   </div>
                 </div>
                 <div>
