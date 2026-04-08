@@ -1,0 +1,96 @@
+// Version: 1.0.0
+type CustomField__309861441 = {fieldName : Text; fieldValue : Text};
+type Customer__263943254 =
+  {
+    address : Text;
+    customFields : [CustomField__309861441];
+    ghRga : Text;
+    isHighlighted : Bool;
+    mobileNumber : Text;
+    name : Text;
+    tag : Text
+  };
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type FieldDefinition__664923838 =
+  {fieldLabel : Text; fieldType : Text; id : Text; order : Nat};
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type Plan__193983685 =
+  {
+    billRefundStatus : Text;
+    dateEntry : Text;
+    installment : Text;
+    mobileNumber : Text;
+    name : Text;
+    plan : Text
+  };
+type TagOption__450056646 = {tagColor : Text; tagLabel : Text};
+type User__831686142 = {createdAt : Int; mobile : Text; userName : Text};
+actor {
+  stable _ADMIN_MOBILE : Text;
+  stable var colorTheme : Text;
+  stable fieldDefinitions :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?FieldDefinition__664923838]];
+      var elementIndex : Nat__490723111
+    };
+  stable legacyCustomers :
+    {
+      var root : Node__46230540<Nat, Customer__263943254>;
+      var size : Nat__490723111
+    };
+  stable legacyIdCounter : Nat;
+  stable var legacyMigrated : Bool;
+  stable var otpSeed : Nat;
+  stable otpStore :
+    {var root : Node__46230540<Text, Text>; var size : Nat__490723111};
+  stable planOptions :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Text]];
+      var elementIndex : Nat__490723111
+    };
+  stable registeredUsers :
+    {
+      var root : Node__46230540<Text, User__831686142>;
+      var size : Nat__490723111
+    };
+  stable settings :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Text]];
+      var elementIndex : Nat__490723111
+    };
+  stable tagOptions :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?TagOption__450056646]];
+      var elementIndex : Nat__490723111
+    };
+  stable userCustomers :
+    {
+      var root :
+        Node__46230540<Text, Map__605269027<Nat, Customer__263943254>>;
+      var size : Nat__490723111
+    };
+  stable userIdCounters :
+    {var root : Node__46230540<Text, Nat>; var size : Nat__490723111};
+  stable userPlanCounters :
+    {var root : Node__46230540<Text, Nat>; var size : Nat__490723111};
+  stable userPlans :
+    {
+      var root : Node__46230540<Text, Map__605269027<Nat, Plan__193983685>>;
+      var size : Nat__490723111
+    }
+};

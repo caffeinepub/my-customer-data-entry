@@ -25,7 +25,7 @@
     --popover: 1 0 0;
     --popover-foreground: 0.18 0.03 50;
 
-    /* Primary: warm amber/orange */
+    /* Primary: warm amber/orange (default — overridden by JS theme) */
     --primary: 0.72 0.18 55;
     --primary-foreground: 0.15 0.03 50;
 
@@ -53,16 +53,19 @@
     --chart-4: 0.6 0.2 30;
     --chart-5: 0.82 0.12 90;
 
-    /* Sidebar: vibrant orange-to-yellow gradient */
+    /* Sidebar base (gradient driven by JS via CSS vars below) */
     --sidebar: 0.57 0.19 50;
     --sidebar-foreground: 0.98 0.02 85;
     --sidebar-primary: 0.95 0.18 90;
     --sidebar-primary-foreground: 0.35 0.12 45;
-    /* Active item */
     --sidebar-accent: 0.9 0.18 85 / 0.3;
     --sidebar-accent-foreground: 0.99 0.02 90;
     --sidebar-border: 0.7 0.16 65 / 0.4;
     --sidebar-ring: 0.95 0.18 90;
+
+    /* Theme sidebar gradient — updated by JS when theme changes */
+    --theme-sidebar-from: oklch(0.52 0.18 50);
+    --theme-sidebar-to: oklch(0.62 0.2 70);
   }
 
   * {
@@ -72,5 +75,15 @@
   body {
     @apply bg-background text-foreground;
     font-family: "Plus Jakarta Sans", sans-serif;
+  }
+}
+
+@layer utilities {
+  .sidebar-gradient {
+    background: linear-gradient(
+      180deg,
+      var(--theme-sidebar-from) 0%,
+      var(--theme-sidebar-to) 100%
+    );
   }
 }

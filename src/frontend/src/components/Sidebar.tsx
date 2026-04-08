@@ -1,10 +1,12 @@
 import { cn } from "@/lib/utils";
+import { LogOut } from "lucide-react";
 import type { Page } from "../App";
 
 interface NavItem {
   id: Page;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 }
 
 interface SidebarProps {
@@ -12,6 +14,9 @@ interface SidebarProps {
   onPageChange: (page: Page) => void;
   navItems: NavItem[];
   customerCount?: number;
+  userMobile?: string;
+  userName?: string;
+  onLogout?: () => void;
 }
 
 export function Sidebar({
@@ -19,15 +24,16 @@ export function Sidebar({
   onPageChange,
   navItems,
   customerCount = 0,
+  userMobile,
+  userName,
+  onLogout,
 }: SidebarProps) {
+  const isAdmin = userMobile === "8128111699";
+  const displayName = userName || userMobile || "";
+  const avatarInitial = displayName ? displayName.charAt(0).toUpperCase() : "?";
+
   return (
-    <aside
-      className="hidden md:flex w-[264px] flex-shrink-0 flex-col h-screen"
-      style={{
-        background:
-          "linear-gradient(180deg, oklch(0.52 0.18 50) 0%, oklch(0.62 0.20 70) 100%)",
-      }}
-    >
+    <aside className="hidden md:flex w-[264px] flex-shrink-0 flex-col h-screen sidebar-gradient">
       {/* Brand */}
       <div
         className="flex items-center gap-3 px-6 py-5"
@@ -56,7 +62,7 @@ export function Sidebar({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
@@ -119,6 +125,62 @@ export function Sidebar({
           );
         })}
       </nav>
+
+      {/* User info + logout */}
+      {userMobile && (
+        <div
+          className="px-4 py-4 flex items-center gap-3"
+          style={{ borderTop: "1px solid oklch(0.70 0.16 65 / 0.4)" }}
+        >
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+            style={{
+              background: "oklch(0.95 0.18 90)",
+              color: "oklch(0.35 0.12 45)",
+            }}
+          >
+            {avatarInitial}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-xs font-semibold truncate"
+              style={{ color: "oklch(0.98 0.02 85)" }}
+            >
+              {displayName}
+            </p>
+            <p
+              className="text-[10px]"
+              style={{ color: "oklch(0.92 0.08 80 / 0.7)" }}
+            >
+              {isAdmin ? "Administrator" : "User"} · {userMobile}
+            </p>
+          </div>
+          {onLogout && (
+            <button
+              type="button"
+              data-ocid="nav.logout.button"
+              onClick={onLogout}
+              aria-label="Logout"
+              className="p-1.5 rounded-md transition-all"
+              style={{ color: "oklch(0.96 0.03 80 / 0.70)" }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "oklch(0.99 0.02 90)";
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "oklch(0.90 0.14 80 / 0.18)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  "oklch(0.96 0.03 80 / 0.70)";
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "transparent";
+              }}
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

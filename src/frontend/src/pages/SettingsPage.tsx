@@ -7,21 +7,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Check,
   Info,
+  Layers,
   Loader2,
+  Palette,
   Pencil,
   Plus,
-  Tag,
   Trash2,
   X,
 } from "lucide-react";
@@ -29,51 +23,206 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { PageShell } from "../components/PageShell";
 import {
+  useGetColorTheme,
+  useGetFieldDefinitions,
+  useGetPlanOptions,
   useGetSettings,
-  useGetTagOptions,
+  useUpdateColorTheme,
+  useUpdateFieldDefinitions,
+  useUpdatePlanOptions,
   useUpdateSettings,
-  useUpdateTagOptions,
 } from "../hooks/useQueries";
-import type { TagOption } from "../hooks/useQueries";
+import type { FieldDefinition } from "../hooks/useQueries";
 
-const COLOR_OPTIONS = [
-  { value: "purple", label: "Purple", dot: "bg-purple-500" },
-  { value: "default", label: "Regular", dot: "bg-gray-400" },
-  { value: "blue", label: "Blue", dot: "bg-blue-500" },
-  { value: "green", label: "Green", dot: "bg-green-500" },
-  { value: "red", label: "Red", dot: "bg-red-500" },
-  { value: "orange", label: "Orange", dot: "bg-orange-500" },
-  { value: "yellow", label: "Yellow", dot: "bg-yellow-500" },
-  { value: "pink", label: "Pink", dot: "bg-pink-500" },
+// ─── Colour Theme ─────────────────────────────────────────────────────────────
+
+const BRIGHT_COLOURS = [
+  { name: "orange", hex: "#F97316", label: "Orange" },
+  { name: "yellow", hex: "#EAB308", label: "Yellow" },
+  { name: "green", hex: "#22C55E", label: "Green" },
+  { name: "blue", hex: "#3B82F6", label: "Blue" },
+  { name: "pink", hex: "#EC4899", label: "Pink" },
+  { name: "purple", hex: "#A855F7", label: "Purple" },
 ];
 
-const COLOR_CLASS_MAP: Record<string, string> = {
-  purple: "bg-purple-100 text-purple-700 border-purple-200",
-  default: "bg-gray-100 text-gray-700 border-gray-200",
-  blue: "bg-blue-100 text-blue-700 border-blue-200",
-  green: "bg-green-100 text-green-700 border-green-200",
-  red: "bg-red-100 text-red-600 border-red-200",
-  orange: "bg-orange-100 text-orange-700 border-orange-200",
-  yellow: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  pink: "bg-pink-100 text-pink-700 border-pink-200",
+const DARK_COLOURS = [
+  { name: "dark-orange", hex: "#C2410C", label: "Dark Orange" },
+  { name: "dark-yellow", hex: "#713F12", label: "Dark Yellow" },
+  { name: "dark-green", hex: "#14532D", label: "Dark Green" },
+  { name: "dark-blue", hex: "#1E3A8A", label: "Dark Blue" },
+  { name: "dark-pink", hex: "#9D174D", label: "Dark Pink" },
+  { name: "dark-purple", hex: "#581C87", label: "Dark Purple" },
+];
+
+// Map theme name to OKLCH primary values for CSS variable update
+const THEME_OKLCH: Record<string, string> = {
+  orange: "0.72 0.18 55",
+  yellow: "0.80 0.18 90",
+  green: "0.65 0.20 145",
+  blue: "0.58 0.20 240",
+  pink: "0.62 0.22 340",
+  purple: "0.58 0.22 295",
+  "dark-orange": "0.52 0.20 38",
+  "dark-yellow": "0.40 0.15 80",
+  "dark-green": "0.35 0.15 150",
+  "dark-blue": "0.32 0.15 245",
+  "dark-pink": "0.40 0.20 340",
+  "dark-purple": "0.32 0.18 295",
 };
 
-function TagBadge({
-  tagLabel,
-  tagColor,
-}: { tagLabel: string; tagColor: string }) {
-  const cls = COLOR_CLASS_MAP[tagColor] ?? COLOR_CLASS_MAP.default;
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}
-    >
-      {tagLabel}
-    </span>
+// Sidebar gradient stops per theme
+const THEME_SIDEBAR_GRADIENT: Record<string, [string, string]> = {
+  orange: ["0.52 0.18 50", "0.62 0.20 70"],
+  yellow: ["0.60 0.18 80", "0.75 0.20 95"],
+  green: ["0.45 0.18 140", "0.60 0.20 155"],
+  blue: ["0.40 0.18 235", "0.55 0.20 250"],
+  pink: ["0.45 0.22 335", "0.58 0.22 345"],
+  purple: ["0.42 0.20 290", "0.55 0.22 300"],
+  "dark-orange": ["0.38 0.18 38", "0.50 0.20 50"],
+  "dark-yellow": ["0.30 0.14 75", "0.42 0.16 88"],
+  "dark-green": ["0.28 0.14 148", "0.38 0.16 155"],
+  "dark-blue": ["0.25 0.14 242", "0.35 0.16 250"],
+  "dark-pink": ["0.32 0.18 338", "0.42 0.20 345"],
+  "dark-purple": ["0.26 0.16 292", "0.36 0.18 300"],
+};
+
+export function applyThemeToDocument(themeName: string) {
+  const primary = THEME_OKLCH[themeName] ?? THEME_OKLCH.orange;
+  const root = document.documentElement;
+  root.style.setProperty("--primary", primary);
+  root.style.setProperty("--ring", primary);
+  root.style.setProperty(
+    "--sidebar",
+    `oklch(${(THEME_SIDEBAR_GRADIENT[themeName] ?? THEME_SIDEBAR_GRADIENT.orange)[0]})`,
+  );
+
+  // Store for Sidebar component to read gradient
+  root.style.setProperty(
+    "--theme-sidebar-from",
+    `oklch(${(THEME_SIDEBAR_GRADIENT[themeName] ?? THEME_SIDEBAR_GRADIENT.orange)[0]})`,
+  );
+  root.style.setProperty(
+    "--theme-sidebar-to",
+    `oklch(${(THEME_SIDEBAR_GRADIENT[themeName] ?? THEME_SIDEBAR_GRADIENT.orange)[1]})`,
   );
 }
 
+// ─── Field Management ─────────────────────────────────────────────────────────
+
+const DEFAULT_FIELD_DEFS: FieldDefinition[] = [
+  { id: "name", fieldLabel: "Name", fieldType: "text", order: BigInt(1) },
+  {
+    id: "mobileNo",
+    fieldLabel: "Mobile Number",
+    fieldType: "text",
+    order: BigInt(2),
+  },
+  { id: "tag", fieldLabel: "Tag", fieldType: "text", order: BigInt(3) },
+  { id: "ghRga", fieldLabel: "GH/RGA", fieldType: "select", order: BigInt(4) },
+  {
+    id: "address",
+    fieldLabel: "Address",
+    fieldType: "textarea",
+    order: BigInt(5),
+  },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function SettingsPage() {
-  // GH/RGA settings
+  // ── Colour theme ──
+  const { data: savedTheme } = useGetColorTheme();
+  const updateColorTheme = useUpdateColorTheme();
+  const [activeTheme, setActiveTheme] = useState<string>("");
+  const currentTheme = activeTheme || savedTheme || "orange";
+
+  const handleSelectTheme = async (themeName: string) => {
+    setActiveTheme(themeName);
+    applyThemeToDocument(themeName);
+    try {
+      await updateColorTheme.mutateAsync(themeName);
+      toast.success("Colour theme updated!");
+    } catch {
+      toast.error("Failed to save colour theme");
+    }
+  };
+
+  // ── Field definitions ──
+  const { data: rawFieldDefs, isLoading: isLoadingFields } =
+    useGetFieldDefinitions();
+  const updateFieldDefinitions = useUpdateFieldDefinitions();
+
+  const fieldDefs: FieldDefinition[] =
+    rawFieldDefs && rawFieldDefs.length > 0
+      ? [...rawFieldDefs].sort((a, b) => Number(a.order) - Number(b.order))
+      : DEFAULT_FIELD_DEFS;
+
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [editingFieldLabel, setEditingFieldLabel] = useState("");
+  const [newFieldLabel, setNewFieldLabel] = useState("");
+  const [isSavingFields, setIsSavingFields] = useState(false);
+  const [deletingFieldId, setDeletingFieldId] = useState<string | null>(null);
+
+  const saveFieldDefs = async (newList: FieldDefinition[]) => {
+    setIsSavingFields(true);
+    try {
+      await updateFieldDefinitions.mutateAsync(newList);
+      toast.success("Fields saved!");
+    } catch {
+      toast.error("Failed to save fields");
+    } finally {
+      setIsSavingFields(false);
+    }
+  };
+
+  const handleStartFieldEdit = (field: FieldDefinition) => {
+    setEditingFieldId(field.id);
+    setEditingFieldLabel(field.fieldLabel);
+  };
+
+  const handleSaveFieldEdit = async () => {
+    if (!editingFieldId) return;
+    if (!editingFieldLabel.trim()) {
+      toast.error("Field name cannot be empty");
+      return;
+    }
+    const updated = fieldDefs.map((f) =>
+      f.id === editingFieldId
+        ? { ...f, fieldLabel: editingFieldLabel.trim() }
+        : f,
+    );
+    setEditingFieldId(null);
+    await saveFieldDefs(updated);
+  };
+
+  const handleDeleteField = async (fieldId: string) => {
+    setDeletingFieldId(fieldId);
+    const updated = fieldDefs.filter((f) => f.id !== fieldId);
+    await saveFieldDefs(updated);
+    setDeletingFieldId(null);
+  };
+
+  const handleAddField = async () => {
+    if (!newFieldLabel.trim()) {
+      toast.error("Please enter a field name");
+      return;
+    }
+    const newId = `field_${Date.now()}`;
+    const maxOrder = fieldDefs.reduce(
+      (m, f) => Math.max(m, Number(f.order)),
+      0,
+    );
+    const newField: FieldDefinition = {
+      id: newId,
+      fieldLabel: newFieldLabel.trim(),
+      fieldType: "text",
+      order: BigInt(maxOrder + 1),
+    };
+    setNewFieldLabel("");
+    await saveFieldDefs([...fieldDefs, newField]);
+  };
+
+  // ── GH/RGA options ──
   const {
     data: options,
     isLoading: isLoadingSettings,
@@ -124,12 +273,8 @@ export function SettingsPage() {
     setEditingIndex(null);
     setEditingValue("");
   };
-
-  const handleDelete = async (index: number) => {
-    const updated = displayOptions.filter((_, i) => i !== index);
-    await saveOptions(updated);
-  };
-
+  const handleDelete = async (index: number) =>
+    saveOptions(displayOptions.filter((_, i) => i !== index));
   const handleAddOption = async () => {
     if (!newOption.trim()) {
       toast.error("Please enter an option value");
@@ -144,90 +289,76 @@ export function SettingsPage() {
     await saveOptions(updated);
   };
 
-  // Tag options
+  // ── Plan options ──
   const {
-    data: tagOpts,
-    isLoading: isLoadingTags,
-    isError: isErrorTags,
-  } = useGetTagOptions();
-  const updateTagOptions = useUpdateTagOptions();
+    data: planOpts,
+    isLoading: isLoadingPlanOpts,
+    isError: isErrorPlanOpts,
+  } = useGetPlanOptions();
+  const updatePlanOptions = useUpdatePlanOptions();
 
-  const [localTagOpts, setLocalTagOpts] = useState<TagOption[] | null>(null);
-  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
-  const [editingTagLabel, setEditingTagLabel] = useState("");
-  const [editingTagColor, setEditingTagColor] = useState("default");
-  const [newTagLabel, setNewTagLabel] = useState("");
-  const [newTagColor, setNewTagColor] = useState("default");
-  const [isSavingTag, setIsSavingTag] = useState(false);
+  const [localPlanOptions, setLocalPlanOptions] = useState<string[] | null>(
+    null,
+  );
+  const [editingPlanIndex, setEditingPlanIndex] = useState<number | null>(null);
+  const [editingPlanValue, setEditingPlanValue] = useState("");
+  const [newPlanOption, setNewPlanOption] = useState("");
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
 
-  const displayTagOpts = localTagOpts ?? tagOpts ?? [];
+  const displayPlanOptions = localPlanOptions ?? planOpts ?? [];
 
-  const saveTagOptions = async (newList: TagOption[]) => {
-    setIsSavingTag(true);
+  const savePlanOptions = async (newList: string[]) => {
+    setIsSavingPlan(true);
     try {
-      await updateTagOptions.mutateAsync(newList);
-      setLocalTagOpts(null);
-      toast.success("Tag options saved!");
+      await updatePlanOptions.mutateAsync(newList);
+      setLocalPlanOptions(null);
+      toast.success("Plan options saved!");
     } catch {
-      toast.error("Failed to save tag options");
+      toast.error("Failed to save plan options");
     } finally {
-      setIsSavingTag(false);
+      setIsSavingPlan(false);
     }
   };
 
-  const handleStartTagEdit = (index: number) => {
-    setEditingTagIndex(index);
-    setEditingTagLabel(displayTagOpts[index].tagLabel);
-    setEditingTagColor(displayTagOpts[index].tagColor);
+  const handleStartPlanEdit = (index: number) => {
+    setEditingPlanIndex(index);
+    setEditingPlanValue(displayPlanOptions[index]);
   };
 
-  const handleSaveTagEdit = async () => {
-    if (editingTagIndex === null) return;
-    if (!editingTagLabel.trim()) {
-      toast.error("Tag label cannot be empty");
+  const handleSavePlanEdit = async () => {
+    if (editingPlanIndex === null) return;
+    if (!editingPlanValue.trim()) {
+      toast.error("Option cannot be empty");
       return;
     }
-    const updated = displayTagOpts.map((opt, i) =>
-      i === editingTagIndex
-        ? { tagLabel: editingTagLabel.trim(), tagColor: editingTagColor }
-        : opt,
+    const updated = displayPlanOptions.map((opt, i) =>
+      i === editingPlanIndex ? editingPlanValue.trim() : opt,
     );
-    setEditingTagIndex(null);
-    await saveTagOptions(updated);
+    setEditingPlanIndex(null);
+    await savePlanOptions(updated);
   };
 
-  const handleCancelTagEdit = () => {
-    setEditingTagIndex(null);
-    setEditingTagLabel("");
-    setEditingTagColor("default");
+  const handleCancelPlanEdit = () => {
+    setEditingPlanIndex(null);
+    setEditingPlanValue("");
   };
-
-  const handleDeleteTag = async (index: number) => {
-    const updated = displayTagOpts.filter((_, i) => i !== index);
-    await saveTagOptions(updated);
-  };
-
-  const handleAddTag = async () => {
-    if (!newTagLabel.trim()) {
-      toast.error("Please enter a tag label");
+  const handleDeletePlanOption = async (index: number) =>
+    savePlanOptions(displayPlanOptions.filter((_, i) => i !== index));
+  const handleAddPlanOption = async () => {
+    if (!newPlanOption.trim()) {
+      toast.error("Please enter an option value");
       return;
     }
-    if (
-      displayTagOpts.some(
-        (t) => t.tagLabel.toLowerCase() === newTagLabel.trim().toLowerCase(),
-      )
-    ) {
-      toast.error("This tag already exists");
+    if (displayPlanOptions.includes(newPlanOption.trim())) {
+      toast.error("This option already exists");
       return;
     }
-    const updated = [
-      ...displayTagOpts,
-      { tagLabel: newTagLabel.trim(), tagColor: newTagColor },
-    ];
-    setNewTagLabel("");
-    setNewTagColor("default");
-    await saveTagOptions(updated);
+    const updated = [...displayPlanOptions, newPlanOption.trim()];
+    setNewPlanOption("");
+    await savePlanOptions(updated);
   };
+
+  // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <PageShell breadcrumb="CustomerHub | Settings" title="Settings">
@@ -236,94 +367,167 @@ export function SettingsPage() {
         <div className="flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
           <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <span>
-            Manage dropdown options for GH/RGA and Tag fields used in the entry
-            form.
+            Manage colour theme, entry form fields, and dropdown options for
+            GH/RGA and Plan fields.
           </span>
         </div>
 
-        {/* TAG OPTIONS CARD */}
+        {/* ── COLOUR THEME CARD ── */}
         <Card className="shadow-card border-border">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <Tag className="h-4 w-4 text-primary" />
+              <Palette className="h-4 w-4 text-primary" />
               <CardTitle className="text-base font-semibold">
-                Tag Options
+                Colour Theme
               </CardTitle>
             </div>
             <CardDescription className="text-sm text-muted-foreground">
-              Manage the dropdown choices for the Tag field. Each tag has a
-              label and a color.
+              Choose a theme colour for buttons, sidebar, and accents throughout
+              the app.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoadingTags && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Bright Colours
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {BRIGHT_COLOURS.map((colour) => {
+                  const isSelected = currentTheme === colour.name;
+                  return (
+                    <button
+                      key={colour.name}
+                      type="button"
+                      data-ocid={`settings.theme.${colour.name}`}
+                      title={colour.label}
+                      onClick={() => handleSelectTheme(colour.name)}
+                      className="relative w-9 h-9 rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={{
+                        backgroundColor: colour.hex,
+                        boxShadow: isSelected
+                          ? `0 0 0 3px white, 0 0 0 5px ${colour.hex}`
+                          : undefined,
+                        transform: isSelected ? "scale(1.15)" : undefined,
+                      }}
+                      aria-label={`Select ${colour.label} theme${isSelected ? " (current)" : ""}`}
+                      aria-pressed={isSelected}
+                    >
+                      {isSelected && (
+                        <Check
+                          className="absolute inset-0 m-auto h-4 w-4"
+                          style={{
+                            color: "white",
+                            filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.4))",
+                          }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Dark Colours
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {DARK_COLOURS.map((colour) => {
+                  const isSelected = currentTheme === colour.name;
+                  return (
+                    <button
+                      key={colour.name}
+                      type="button"
+                      data-ocid={`settings.theme.${colour.name}`}
+                      title={colour.label}
+                      onClick={() => handleSelectTheme(colour.name)}
+                      className="relative w-9 h-9 rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={{
+                        backgroundColor: colour.hex,
+                        boxShadow: isSelected
+                          ? `0 0 0 3px white, 0 0 0 5px ${colour.hex}`
+                          : undefined,
+                        transform: isSelected ? "scale(1.15)" : undefined,
+                      }}
+                      aria-label={`Select ${colour.label} theme${isSelected ? " (current)" : ""}`}
+                      aria-pressed={isSelected}
+                    >
+                      {isSelected && (
+                        <Check
+                          className="absolute inset-0 m-auto h-4 w-4"
+                          style={{
+                            color: "white",
+                            filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.4))",
+                          }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Currently selected:{" "}
+              <span className="font-medium capitalize text-foreground">
+                {[...BRIGHT_COLOURS, ...DARK_COLOURS].find(
+                  (c) => c.name === currentTheme,
+                )?.label ?? currentTheme}
+              </span>
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* ── ENTRY FORM FIELDS CARD ── */}
+        <Card className="shadow-card border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base font-semibold">
+                Entry Form Fields
+              </CardTitle>
+            </div>
+            <CardDescription className="text-sm text-muted-foreground">
+              Add, rename, or remove fields shown on the Customer Entry Form.
+              All fields can be customised.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isLoadingFields && (
               <div className="space-y-2">
-                {[1, 2].map((i) => (
+                {[1, 2, 3, 4, 5].map((i) => (
                   <Skeleton key={i} className="h-10 w-full rounded-lg" />
                 ))}
               </div>
             )}
 
-            {isErrorTags && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                Failed to load tag options.
-              </div>
-            )}
-
-            {!isLoadingTags && displayTagOpts.length === 0 && (
-              <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                No tag options yet. Add your first tag below.
-              </div>
-            )}
-
-            {!isLoadingTags && displayTagOpts.length > 0 && (
+            {!isLoadingFields && fieldDefs.length > 0 && (
               <ul className="space-y-2">
-                {displayTagOpts.map((opt, idx) => (
+                {fieldDefs.map((field) => (
                   <li
-                    key={`${opt.tagLabel}-${idx}`}
+                    key={field.id}
+                    data-ocid={`settings.field.${field.id}`}
                     className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2"
                   >
-                    {editingTagIndex === idx ? (
+                    {editingFieldId === field.id ? (
                       <>
                         <Input
-                          value={editingTagLabel}
-                          onChange={(e) => setEditingTagLabel(e.target.value)}
+                          value={editingFieldLabel}
+                          onChange={(e) => setEditingFieldLabel(e.target.value)}
                           className="h-8 flex-1 text-sm"
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveTagEdit();
-                            if (e.key === "Escape") handleCancelTagEdit();
+                            if (e.key === "Enter") handleSaveFieldEdit();
+                            if (e.key === "Escape") setEditingFieldId(null);
                           }}
                           autoFocus
-                          placeholder="Tag label"
+                          placeholder="Field label"
                         />
-                        <Select
-                          value={editingTagColor}
-                          onValueChange={setEditingTagColor}
-                        >
-                          <SelectTrigger className="h-8 w-32 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {COLOR_OPTIONS.map((c) => (
-                              <SelectItem key={c.value} value={c.value}>
-                                <div className="flex items-center gap-1.5">
-                                  <span
-                                    className={`inline-block h-2.5 w-2.5 rounded-full ${c.dot}`}
-                                  />
-                                  {c.label}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                          onClick={handleSaveTagEdit}
-                          disabled={isSavingTag}
+                          onClick={handleSaveFieldEdit}
+                          disabled={isSavingFields}
                         >
-                          {isSavingTag ? (
+                          {isSavingFields ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <Check className="h-3.5 w-3.5" />
@@ -333,25 +537,26 @@ export function SettingsPage() {
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          onClick={handleCancelTagEdit}
+                          onClick={() => setEditingFieldId(null)}
                         >
                           <X className="h-3.5 w-3.5" />
                         </Button>
                       </>
                     ) : (
                       <>
-                        <span className="flex-1">
-                          <TagBadge
-                            tagLabel={opt.tagLabel}
-                            tagColor={opt.tagColor}
-                          />
+                        <span className="flex-1 text-sm font-medium text-foreground">
+                          {field.fieldLabel}
+                          <span className="ml-2 text-xs text-muted-foreground font-normal">
+                            ({field.fieldType})
+                          </span>
                         </span>
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => handleStartTagEdit(idx)}
-                          title={`Edit "${opt.tagLabel}"`}
+                          onClick={() => handleStartFieldEdit(field)}
+                          title={`Rename "${field.fieldLabel}"`}
+                          data-ocid={`settings.field.edit.${field.id}`}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -359,11 +564,18 @@ export function SettingsPage() {
                           size="icon"
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDeleteTag(idx)}
-                          disabled={isSavingTag}
-                          title={`Delete "${opt.tagLabel}"`}
+                          onClick={() => handleDeleteField(field.id)}
+                          disabled={
+                            isSavingFields || deletingFieldId === field.id
+                          }
+                          title={`Delete "${field.fieldLabel}"`}
+                          data-ocid={`settings.field.delete.${field.id}`}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          {deletingFieldId === field.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
                         </Button>
                       </>
                     )}
@@ -372,46 +584,31 @@ export function SettingsPage() {
               </ul>
             )}
 
-            {/* Add new tag */}
+            {/* Add new field */}
             <div className="flex items-center gap-2 pt-2 border-t border-border">
               <Input
-                placeholder="Tag label (e.g. VIP)"
-                value={newTagLabel}
-                onChange={(e) => setNewTagLabel(e.target.value)}
+                placeholder="New field name (e.g. Birthday)"
+                value={newFieldLabel}
+                onChange={(e) => setNewFieldLabel(e.target.value)}
                 className="h-10 flex-1"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAddTag();
+                  if (e.key === "Enter") handleAddField();
                 }}
+                data-ocid="settings.field.new_input"
               />
-              <Select value={newTagColor} onValueChange={setNewTagColor}>
-                <SelectTrigger className="h-10 w-32 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {COLOR_OPTIONS.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className={`inline-block h-2.5 w-2.5 rounded-full ${c.dot}`}
-                        />
-                        {c.label}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Button
-                onClick={handleAddTag}
-                disabled={isSavingTag}
+                onClick={handleAddField}
+                disabled={isSavingFields}
                 className="h-10 gap-1.5 whitespace-nowrap"
+                data-ocid="settings.field.add_button"
               >
-                {isSavingTag ? (
+                {isSavingFields ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" /> Saving...
                   </>
                 ) : (
                   <>
-                    <Plus className="h-4 w-4" /> Add Tag
+                    <Plus className="h-4 w-4" /> Add Field
                   </>
                 )}
               </Button>
@@ -419,7 +616,7 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* GH/RGA OPTIONS CARD */}
+        {/* ── GH/RGA OPTIONS CARD ── */}
         <Card className="shadow-card border-border">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">
@@ -553,6 +750,149 @@ export function SettingsPage() {
                 className="h-10 gap-1.5 whitespace-nowrap"
               >
                 {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" /> Add Option
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+        {/* ── PLAN OPTIONS CARD ── */}
+        <Card className="shadow-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">
+              Plan Options
+            </CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">
+              Manage the dropdown choices for the Plan field in the PLANS form.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {isLoadingPlanOpts && (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                ))}
+              </div>
+            )}
+
+            {isErrorPlanOpts && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                Failed to load plan options.
+              </div>
+            )}
+
+            {!isLoadingPlanOpts && displayPlanOptions.length === 0 && (
+              <div
+                data-ocid="settings.plan_options.empty_state"
+                className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground"
+              >
+                No plan options yet. Add your first option below.
+              </div>
+            )}
+
+            {!isLoadingPlanOpts && displayPlanOptions.length > 0 && (
+              <ul className="space-y-2">
+                {displayPlanOptions.map((opt, idx) => (
+                  <li
+                    key={opt}
+                    data-ocid={`settings.plan_option.${idx + 1}`}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2"
+                  >
+                    {editingPlanIndex === idx ? (
+                      <>
+                        <Input
+                          data-ocid="settings.plan_option.edit_input"
+                          value={editingPlanValue}
+                          onChange={(e) => setEditingPlanValue(e.target.value)}
+                          className="h-8 flex-1 text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSavePlanEdit();
+                            if (e.key === "Escape") handleCancelPlanEdit();
+                          }}
+                          autoFocus
+                        />
+                        <Button
+                          data-ocid="settings.plan_option.save_edit_button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                          onClick={handleSavePlanEdit}
+                          disabled={isSavingPlan}
+                        >
+                          {isSavingPlan ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          data-ocid="settings.plan_option.cancel_edit_button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={handleCancelPlanEdit}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm font-medium text-foreground">
+                          {opt}
+                        </span>
+                        <Button
+                          data-ocid={`settings.plan_option.edit_button.${idx + 1}`}
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                          onClick={() => handleStartPlanEdit(idx)}
+                          title={`Edit "${opt}"`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          data-ocid={`settings.plan_option.delete_button.${idx + 1}`}
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDeletePlanOption(idx)}
+                          disabled={isSavingPlan}
+                          title={`Delete "${opt}"`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Add new plan option */}
+            <div className="flex items-center gap-2 pt-2 border-t border-border">
+              <Input
+                data-ocid="settings.plan_option.new_input"
+                placeholder="New plan option (e.g. Gold Plan)"
+                value={newPlanOption}
+                onChange={(e) => setNewPlanOption(e.target.value)}
+                className="h-10 flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddPlanOption();
+                }}
+              />
+              <Button
+                data-ocid="settings.plan_option.add_button"
+                onClick={handleAddPlanOption}
+                disabled={isSavingPlan}
+                className="h-10 gap-1.5 whitespace-nowrap"
+              >
+                {isSavingPlan ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" /> Saving...
                   </>

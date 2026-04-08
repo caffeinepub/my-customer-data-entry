@@ -8,11 +8,15 @@
 
 import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
+import type { Principal } from '@icp-sdk/core/principal';
 
+export interface CustomField { 'fieldName' : string, 'fieldValue' : string }
 export interface Customer {
   'tag' : string,
   'name' : string,
   'mobileNumber' : string,
+  'isHighlighted' : boolean,
+  'customFields' : Array<CustomField>,
   'ghRga' : string,
   'address' : string,
 }
@@ -21,23 +25,87 @@ export interface CustomerWithId {
   'tag' : string,
   'name' : string,
   'mobileNumber' : string,
+  'isHighlighted' : boolean,
+  'customFields' : Array<CustomField>,
   'ghRga' : string,
   'address' : string,
 }
-export interface TagOption {
-  'tagLabel' : string,
-  'tagColor' : string,
+export interface FieldDefinition {
+  'id' : string,
+  'order' : bigint,
+  'fieldLabel' : string,
+  'fieldType' : string,
+}
+export interface Plan {
+  'name' : string,
+  'plan' : string,
+  'dateEntry' : string,
+  'mobileNumber' : string,
+  'installment' : string,
+  'billRefundStatus' : string,
+}
+export interface PlanWithId {
+  'id' : bigint,
+  'name' : string,
+  'plan' : string,
+  'dateEntry' : string,
+  'mobileNumber' : string,
+  'installment' : string,
+  'daysCount' : bigint,
+  'billRefundStatus' : string,
+}
+export interface TagOption { 'tagColor' : string, 'tagLabel' : string }
+export interface User {
+  'userName' : string,
+  'createdAt' : bigint,
+  'mobile' : string,
+}
+export interface UserCustomerData {
+  'userMobile' : string,
+  'customers' : Array<CustomerWithId>,
+}
+export interface UserPlanData {
+  'userMobile' : string,
+  'plans' : Array<PlanWithId>,
 }
 export interface _SERVICE {
-  'addCustomer' : ActorMethod<[Customer], bigint>,
-  'deleteCustomer' : ActorMethod<[bigint], undefined>,
-  'getAllCustomers' : ActorMethod<[], Array<CustomerWithId>>,
-  'getCustomer' : ActorMethod<[bigint], Customer>,
+  'addCustomer' : ActorMethod<[string, Customer], bigint>,
+  'addPlan' : ActorMethod<[string, Plan], PlanWithId>,
+  'createUser' : ActorMethod<
+    [string, string, string],
+    { 'ok' : boolean, 'message' : string }
+  >,
+  'deleteCustomer' : ActorMethod<[string, bigint], boolean>,
+  'deletePlan' : ActorMethod<[string, bigint], boolean>,
+  'deleteUser' : ActorMethod<
+    [string, string],
+    { 'ok' : boolean, 'message' : string }
+  >,
+  'generateOtp' : ActorMethod<[string], string>,
+  'getAllCustomers' : ActorMethod<[string], Array<CustomerWithId>>,
+  'getAllCustomersForAdmin' : ActorMethod<[], Array<UserCustomerData>>,
+  'getAllPlans' : ActorMethod<[string], Array<PlanWithId>>,
+  'getAllPlansForAdmin' : ActorMethod<[], Array<UserPlanData>>,
+  'getAllUsers' : ActorMethod<[], Array<string>>,
+  'getColorTheme' : ActorMethod<[], string>,
+  'getCustomer' : ActorMethod<[string, bigint], [] | [CustomerWithId]>,
+  'getCustomerCount' : ActorMethod<[string], bigint>,
+  'getFieldDefinitions' : ActorMethod<[], Array<FieldDefinition>>,
+  'getPlan' : ActorMethod<[string, bigint], [] | [PlanWithId]>,
+  'getPlanOptions' : ActorMethod<[], Array<string>>,
+  'getRegisteredUsers' : ActorMethod<[string], Array<User>>,
   'getSettings' : ActorMethod<[], Array<string>>,
   'getTagOptions' : ActorMethod<[], Array<TagOption>>,
-  'updateCustomer' : ActorMethod<[bigint, Customer], undefined>,
+  'getUserName' : ActorMethod<[string], string>,
+  'updateColorTheme' : ActorMethod<[string], undefined>,
+  'updateCustomer' : ActorMethod<[string, bigint, Customer], boolean>,
+  'updateFieldDefinitions' : ActorMethod<[Array<FieldDefinition>], undefined>,
+  'updatePlan' : ActorMethod<[string, bigint, Plan], boolean>,
+  'updatePlanOptions' : ActorMethod<[Array<string>], undefined>,
+  'updatePlanStatus' : ActorMethod<[string, bigint, string], boolean>,
   'updateSettings' : ActorMethod<[Array<string>], undefined>,
   'updateTagOptions' : ActorMethod<[Array<TagOption>], undefined>,
+  'verifyOtp' : ActorMethod<[string, string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

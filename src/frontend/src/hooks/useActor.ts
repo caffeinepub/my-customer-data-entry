@@ -1,39 +1,47 @@
+import { createActorWithConfig } from "@caffeineai/core-infrastructure";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { createActor } from "../backend";
 import type { backendInterface } from "../backend";
-import { createActorWithConfig } from "../config";
 
 const ACTOR_QUERY_KEY = "actor";
-export function useActor() {
+
+/**
+ * Custom useActor hook that bypasses the core-infrastructure library's
+ * useActor, which tries to call _initializeAccessControl() when an
+ * Internet Identity is present. Our backend has no such method and no
+ * access control — all calls are anonymous.
+ */
+export function useActor(): {
+  actor: backendInterface | null;
+  isFetching: boolean;
+} {
   const queryClient = useQueryClient();
+
   const actorQuery = useQuery<backendInterface>({
     queryKey: [ACTOR_QUERY_KEY],
     queryFn: async () => {
-      // Always connect anonymously -- no access control setup needed
-      return await createActorWithConfig();
+      // Always create an anonymous actor — no identity, no access control.
+      return await createActorWithConfig(createActor);
     },
     staleTime: Number.POSITIVE_INFINITY,
     enabled: true,
   });
 
-  // When the actor changes, invalidate dependent queries
+  // When the actor becomes available, invalidate and refetch all dependent queries.
   useEffect(() => {
     if (actorQuery.data) {
       queryClient.invalidateQueries({
-        predicate: (query) => {
-          return !query.queryKey.includes(ACTOR_QUERY_KEY);
-        },
+        predicate: (query) => !query.queryKey.includes(ACTOR_QUERY_KEY),
       });
       queryClient.refetchQueries({
-        predicate: (query) => {
-          return !query.queryKey.includes(ACTOR_QUERY_KEY);
-        },
+        predicate: (query) => !query.queryKey.includes(ACTOR_QUERY_KEY),
       });
     }
   }, [actorQuery.data, queryClient]);
 
   return {
-    actor: actorQuery.data || null,
+    actor: actorQuery.data ?? null,
     isFetching: actorQuery.isFetching,
   };
 }
