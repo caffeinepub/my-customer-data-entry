@@ -15,6 +15,7 @@ import * as XLSX from "xlsx";
 import { PageShell } from "../components/PageShell";
 import {
   useAddPlan,
+  useDeleteAllPlans,
   useDeletePlan,
   useGetAllPlans,
   useGetPlanOptions,
@@ -27,14 +28,14 @@ interface PlansPageProps {
   userMobile: string;
 }
 
-function calcDays(dateEntry: string): number {
+export function calcDays(dateEntry: string): number {
   if (!dateEntry) return 0;
   return Math.floor(
     (Date.now() - new Date(dateEntry).getTime()) / (1000 * 60 * 60 * 24),
   );
 }
 
-function getRowBg(status: string): string {
+export function getRowBg(status: string): string {
   if (status === "bill_done") return "bg-blue-100";
   if (status === "refund") return "bg-red-100";
   return "";
@@ -299,7 +300,6 @@ function MobileDetailModal({
     }
   };
 
-  // Use latest plans from cache (passed in via props, already reactive)
   const currentMatching = plans.filter((p) => p.mobileNumber === mobile);
 
   return (
@@ -613,23 +613,86 @@ function StatusPicker({
   );
 }
 
+// ── Delete All Confirmation Modal ────────────────────────────────────────────
+
+function DeleteAllModal({
+  count,
+  isDeleting,
+  onConfirm,
+  onCancel,
+}: {
+  count: number;
+  isDeleting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isDeleting) onCancel();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onCancel, isDeleting]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.55)" }}
+    >
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-sm border border-destructive/30 p-6 flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-bold text-destructive uppercase tracking-wide">
+            ⚠ DELETE ALL PLAN DATA
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete{" "}
+            <span className="font-bold text-foreground">{count}</span> plan
+            {count !== 1 ? "s" : ""}. This action cannot be undone.
+          </p>
+        </div>
+        <div className="flex gap-3 justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            data-ocid="plans.delete_all.confirm.button"
+            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold"
+            onClick={onConfirm}
+            disabled={isDeleting}
+          >
+            {isDeleting ? "Deleting..." : "Delete All"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export function PlansPage({ userMobile }: PlansPageProps) {
   const [search, setSearch] = useState("");
   const [filterPlan, setFilterPlan] = useState("all");
   const [selectedMobile, setSelectedMobile] = useState<string | null>(null);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
   const { data: plans = [], isLoading } = useGetAllPlans(userMobile);
   const { data: planOptions = [] } = useGetPlanOptions();
   const deletePlan = useDeletePlan(userMobile);
+  const deleteAllPlans = useDeleteAllPlans(userMobile);
   const addPlan = useAddPlan(userMobile);
   const updatePlanStatus = useUpdatePlanStatus();
 
   const allPlanOptions = planOptions.length > 0 ? planOptions : ["GHS", "RGA"];
 
-  // Filter + search (includes billRefundStatus)
+  // Filter + search
   const filtered = plans.filter((p) => {
     const term = search.toLowerCase();
     const statusLabel =
@@ -657,6 +720,17 @@ export function PlansPage({ userMobile }: PlansPageProps) {
       toast.success("Plan deleted");
     } catch {
       toast.error("Failed to delete plan");
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const ids = plans.map((p) => p.id);
+    try {
+      await deleteAllPlans.mutateAsync(ids);
+      toast.success(`Deleted all ${ids.length} plan(s)`);
+      setShowDeleteAllModal(false);
+    } catch {
+      toast.error("Failed to delete all plans");
     }
   };
 
@@ -750,7 +824,18 @@ export function PlansPage({ userMobile }: PlansPageProps) {
       breadcrumb="CustomerHub | Plans"
       title="Plans"
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Button
+            data-ocid="plans.delete_all.button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDeleteAllModal(true)}
+            disabled={plans.length === 0}
+            className="h-9 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete All
+          </Button>
           <Button
             data-ocid="plans.export.button"
             variant="outline"
@@ -888,13 +973,23 @@ export function PlansPage({ userMobile }: PlansPageProps) {
           onClose={() => setSelectedMobile(null)}
         />
       )}
+
+      {/* Delete All Confirmation Modal */}
+      {showDeleteAllModal && (
+        <DeleteAllModal
+          count={plans.length}
+          isDeleting={deleteAllPlans.isPending}
+          onConfirm={handleDeleteAll}
+          onCancel={() => setShowDeleteAllModal(false)}
+        />
+      )}
     </PageShell>
   );
 }
 
 // ── Table Row ────────────────────────────────────────────────────────────────
 
-function PlanTableRow({
+export function PlanTableRow({
   plan,
   onDelete,
   onStatusChange,
@@ -911,23 +1006,25 @@ function PlanTableRow({
 
   const days = calcDays(plan.dateEntry);
   const isOld = days >= 300;
-  const isChecked =
-    plan.billRefundStatus === "bill_done" || plan.billRefundStatus === "refund";
-  const rowBg = getRowBg(plan.billRefundStatus);
+  const status = plan.billRefundStatus;
+  const isBillDone = status === "bill_done";
+  const isRefund = status === "refund";
+  const hasStatus = isBillDone || isRefund;
+  const rowBg = getRowBg(status);
 
-  const handleCheckboxChange = (checked: boolean) => {
-    if (checked) {
-      setShowPicker(true);
-    } else {
-      // Uncheck clears status
-      onStatusChange(plan.id, "");
-      setShowPicker(false);
-    }
+  const handleCheckboxChange = () => {
+    // Unchecked → show picker
+    setShowPicker(true);
   };
 
-  const handlePickerSelect = (status: string) => {
+  const handleStatusBadgeClick = () => {
+    // Already has status → re-open picker to change or the user can clear
+    setShowPicker(true);
+  };
+
+  const handlePickerSelect = (newStatus: string) => {
     setShowPicker(false);
-    onStatusChange(plan.id, status);
+    onStatusChange(plan.id, newStatus);
   };
 
   return (
@@ -935,17 +1032,39 @@ function PlanTableRow({
       data-ocid="plans.row"
       className={`border-b border-border transition-colors ${rowBg || "hover:bg-muted/30"}`}
     >
-      {/* Status checkbox cell */}
+      {/* Status cell — checkbox when no status; colored bold text when status set */}
       <td ref={cellRef} className="px-3 py-3 relative">
         <div className="relative inline-block">
-          <input
-            type="checkbox"
-            data-ocid="plans.status_checkbox"
-            checked={isChecked}
-            onChange={(e) => handleCheckboxChange(e.target.checked)}
-            className="w-4 h-4 cursor-pointer accent-amber-500"
-            aria-label="Set bill status"
-          />
+          {hasStatus ? (
+            // Show colored text label; clicking it re-opens the picker
+            <button
+              type="button"
+              data-ocid="plans.status_label"
+              aria-label={
+                isBillDone
+                  ? "Bill Done — click to change"
+                  : "Refund — click to change"
+              }
+              onClick={handleStatusBadgeClick}
+              className={`text-xs font-bold px-2 py-1 rounded cursor-pointer select-none leading-tight transition-opacity hover:opacity-80 ${
+                isBillDone
+                  ? "text-blue-700 bg-blue-100 border border-blue-300"
+                  : "text-red-700 bg-red-100 border border-red-300"
+              }`}
+            >
+              {isBillDone ? "BILL DONE" : "REFUND"}
+            </button>
+          ) : (
+            // Show checkbox when no status
+            <input
+              type="checkbox"
+              data-ocid="plans.status_checkbox"
+              checked={false}
+              onChange={handleCheckboxChange}
+              className="w-4 h-4 cursor-pointer accent-amber-500"
+              aria-label="Set bill status"
+            />
+          )}
           {showPicker && (
             <StatusPicker
               onSelect={handlePickerSelect}

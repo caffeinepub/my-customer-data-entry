@@ -8,7 +8,7 @@ import {
   Shield,
   Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sidebar } from "./components/Sidebar";
 import { useAuth } from "./hooks/useAuth";
 import { useGetAllCustomers, useGetColorTheme } from "./hooks/useQueries";
@@ -47,10 +47,29 @@ const BASE_NAV_ITEMS: {
 
 export { BASE_NAV_ITEMS as navItems };
 
+function useLiveClock() {
+  const [now, setNow] = useState(() => new Date());
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => setNow(new Date()), 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return { date, time };
+}
+
 function UserNameBanner({ userName }: { userName: string }) {
+  const { date, time } = useLiveClock();
+
   return (
     <div
-      className="w-full px-4 md:px-6 py-1.5 flex items-center justify-between flex-shrink-0"
+      className="w-full px-4 md:px-6 py-1.5 flex items-center justify-between gap-3 flex-shrink-0"
       style={{
         background:
           "linear-gradient(90deg, oklch(0.52 0.18 50) 0%, oklch(0.65 0.2 75) 50%, oklch(0.78 0.18 90) 100%)",
@@ -63,12 +82,17 @@ function UserNameBanner({ userName }: { userName: string }) {
       >
         Welcome, {userName}
       </p>
-      <span
-        className="text-xs font-medium hidden sm:block"
-        style={{ color: "oklch(1 0 0 / 0.75)" }}
+      <div
+        className="flex items-center gap-2 text-xs font-mono font-semibold shrink-0"
+        style={{ color: "oklch(1 0 0 / 0.92)" }}
+        data-ocid="app.live-clock"
+        aria-live="off"
+        aria-atomic="true"
       >
-        My Customer Data Entry
-      </span>
+        <span>{date}</span>
+        <span style={{ color: "oklch(1 0 0 / 0.55)" }}>|</span>
+        <span>{time}</span>
+      </div>
     </div>
   );
 }

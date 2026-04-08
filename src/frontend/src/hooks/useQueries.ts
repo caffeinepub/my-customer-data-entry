@@ -455,6 +455,22 @@ export function useDeletePlan(userMobile: string) {
   });
 }
 
+export function useDeleteAllPlans(userMobile: string) {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (planIds: number[]) => {
+      if (!actor) throw new Error("Not connected");
+      for (const id of planIds) {
+        await actor.deletePlan(userMobile, BigInt(id));
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plans", userMobile] });
+    },
+  });
+}
+
 export function useUpdatePlanOptions() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
