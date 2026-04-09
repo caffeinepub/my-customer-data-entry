@@ -1,27 +1,30 @@
 module {
   /// A PLANS entry (stored without daysCount — calculated at retrieval time)
-  public type Plan = {
-    dateEntry : Text;      // ISO date string: "YYYY-MM-DD"
+  public type PlanData = {
+    dateStr : Text;        // ISO date string: "YYYY-MM-DD"
     name : Text;
-    mobileNumber : Text;   // 10 digits
+    mobile : Text;         // 10 digits
     installment : Text;
     plan : Text;           // selected from Plan dropdown options
+    status : Text;         // "" | "BILL_DONE" | "REFUND"
   };
 
-  /// Plan with its auto-assigned ID and calculated daysCount
+  /// Plan with its auto-assigned Text ID and calculated daysCount
   public type PlanWithId = {
-    id : Nat;
-    dateEntry : Text;
+    id : Text;
+    dateStr : Text;
     name : Text;
-    mobileNumber : Text;
+    mobile : Text;
     installment : Text;
     plan : Text;
-    daysCount : Nat;       // calculated: days elapsed since dateEntry
+    status : Text;
+    daysCount : Nat;       // calculated: days elapsed since dateStr
   };
 
-  /// Admin aggregate: all plans for a given user
-  public type UserPlanData = {
-    userMobile : Text;
-    plans : [PlanWithId];
+  /// Plan dropdown option
+  public type PlanOption = {
+    id : Text;
+    label : Text;
+    color : Text;
   };
 };

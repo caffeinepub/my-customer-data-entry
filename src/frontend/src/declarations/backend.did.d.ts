@@ -10,101 +10,87 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
-export interface CustomField { 'fieldName' : string, 'fieldValue' : string }
-export interface Customer {
-  'tag' : string,
-  'name' : string,
-  'mobileNumber' : string,
-  'isHighlighted' : boolean,
-  'customFields' : Array<CustomField>,
-  'ghRga' : string,
-  'address' : string,
-}
+export interface CustomerData { 'fields' : Array<[string, string]> }
 export interface CustomerWithId {
-  'id' : bigint,
-  'tag' : string,
-  'name' : string,
-  'mobileNumber' : string,
-  'isHighlighted' : boolean,
-  'customFields' : Array<CustomField>,
-  'ghRga' : string,
-  'address' : string,
+  'id' : string,
+  'fields' : Array<[string, string]>,
 }
-export interface FieldDefinition {
+export interface DropdownOption {
+  'id' : string,
+  'optionLabel' : string,
+  'color' : string,
+}
+export interface FieldDef {
   'id' : string,
   'order' : bigint,
   'fieldLabel' : string,
+  'required' : boolean,
   'fieldType' : string,
 }
-export interface Plan {
+export interface PlanData {
+  'status' : string,
+  'dateStr' : string,
   'name' : string,
   'plan' : string,
-  'dateEntry' : string,
-  'mobileNumber' : string,
   'installment' : string,
-  'billRefundStatus' : string,
-}
-export interface PlanWithId {
-  'id' : bigint,
-  'name' : string,
-  'plan' : string,
-  'dateEntry' : string,
-  'mobileNumber' : string,
-  'installment' : string,
-  'daysCount' : bigint,
-  'billRefundStatus' : string,
-}
-export interface TagOption { 'tagColor' : string, 'tagLabel' : string }
-export interface User {
-  'userName' : string,
-  'createdAt' : bigint,
   'mobile' : string,
 }
-export interface UserCustomerData {
-  'userMobile' : string,
-  'customers' : Array<CustomerWithId>,
+export interface PlanOption {
+  'id' : string,
+  'optionLabel' : string,
+  'color' : string,
 }
-export interface UserPlanData {
-  'userMobile' : string,
-  'plans' : Array<PlanWithId>,
+export interface PlanWithId {
+  'id' : string,
+  'status' : string,
+  'dateStr' : string,
+  'name' : string,
+  'plan' : string,
+  'installment' : string,
+  'daysCount' : bigint,
+  'mobile' : string,
 }
+export interface Settings { 'ghRgaOptions' : Array<DropdownOption> }
+export interface TagOption {
+  'id' : string,
+  'optionLabel' : string,
+  'color' : string,
+}
+export interface UserInfo { 'userName' : string, 'mobile' : string }
 export interface _SERVICE {
-  'addCustomer' : ActorMethod<[string, Customer], bigint>,
-  'addPlan' : ActorMethod<[string, Plan], PlanWithId>,
-  'createUser' : ActorMethod<
-    [string, string, string],
-    { 'ok' : boolean, 'message' : string }
-  >,
-  'deleteCustomer' : ActorMethod<[string, bigint], boolean>,
-  'deletePlan' : ActorMethod<[string, bigint], boolean>,
-  'deleteUser' : ActorMethod<
-    [string, string],
-    { 'ok' : boolean, 'message' : string }
-  >,
+  'addCustomer' : ActorMethod<[string, CustomerData], string>,
+  'addPlan' : ActorMethod<[string, PlanData], string>,
+  'createUser' : ActorMethod<[string, string], boolean>,
+  'deleteAllPlans' : ActorMethod<[string], boolean>,
+  'deleteCustomer' : ActorMethod<[string, string], boolean>,
+  'deletePlan' : ActorMethod<[string, string], boolean>,
+  'deleteUser' : ActorMethod<[string], boolean>,
   'generateOtp' : ActorMethod<[string], string>,
   'getAllCustomers' : ActorMethod<[string], Array<CustomerWithId>>,
-  'getAllCustomersForAdmin' : ActorMethod<[], Array<UserCustomerData>>,
+  'getAllCustomersForAdmin' : ActorMethod<
+    [],
+    Array<[string, Array<CustomerWithId>]>
+  >,
   'getAllPlans' : ActorMethod<[string], Array<PlanWithId>>,
-  'getAllPlansForAdmin' : ActorMethod<[], Array<UserPlanData>>,
-  'getAllUsers' : ActorMethod<[], Array<string>>,
+  'getAllPlansForAdmin' : ActorMethod<[], Array<[string, Array<PlanWithId>]>>,
   'getColorTheme' : ActorMethod<[], string>,
-  'getCustomer' : ActorMethod<[string, bigint], [] | [CustomerWithId]>,
+  'getCustomer' : ActorMethod<[string, string], [] | [CustomerWithId]>,
   'getCustomerCount' : ActorMethod<[string], bigint>,
-  'getFieldDefinitions' : ActorMethod<[], Array<FieldDefinition>>,
-  'getPlan' : ActorMethod<[string, bigint], [] | [PlanWithId]>,
-  'getPlanOptions' : ActorMethod<[], Array<string>>,
-  'getRegisteredUsers' : ActorMethod<[string], Array<User>>,
-  'getSettings' : ActorMethod<[], Array<string>>,
+  'getFieldDefinitions' : ActorMethod<[], Array<FieldDef>>,
+  'getPlan' : ActorMethod<[string, string], [] | [PlanWithId]>,
+  'getPlanOptions' : ActorMethod<[], Array<PlanOption>>,
+  'getRegisteredUsers' : ActorMethod<[], Array<UserInfo>>,
+  'getSettings' : ActorMethod<[], Settings>,
   'getTagOptions' : ActorMethod<[], Array<TagOption>>,
-  'getUserName' : ActorMethod<[string], string>,
-  'updateColorTheme' : ActorMethod<[string], undefined>,
-  'updateCustomer' : ActorMethod<[string, bigint, Customer], boolean>,
-  'updateFieldDefinitions' : ActorMethod<[Array<FieldDefinition>], undefined>,
-  'updatePlan' : ActorMethod<[string, bigint, Plan], boolean>,
-  'updatePlanOptions' : ActorMethod<[Array<string>], undefined>,
-  'updatePlanStatus' : ActorMethod<[string, bigint, string], boolean>,
-  'updateSettings' : ActorMethod<[Array<string>], undefined>,
-  'updateTagOptions' : ActorMethod<[Array<TagOption>], undefined>,
+  'getUserName' : ActorMethod<[string], [] | [string]>,
+  'updateColorTheme' : ActorMethod<[string], boolean>,
+  'updateCustomer' : ActorMethod<[string, string, CustomerData], boolean>,
+  'updateFieldDefinitions' : ActorMethod<[Array<FieldDef>], boolean>,
+  'updatePlan' : ActorMethod<[string, string, PlanData], boolean>,
+  'updatePlanOptions' : ActorMethod<[Array<PlanOption>], boolean>,
+  'updatePlanStatus' : ActorMethod<[string, string, string], boolean>,
+  'updateSettings' : ActorMethod<[Settings], boolean>,
+  'updateTagOptions' : ActorMethod<[Array<TagOption>], boolean>,
   'verifyOtp' : ActorMethod<[string, string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;

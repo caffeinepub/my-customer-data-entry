@@ -26,6 +26,7 @@ import type { PlanWithId } from "../hooks/useQueries";
 
 interface PlansPageProps {
   userMobile: string;
+  initialMobileSearch?: string;
 }
 
 export function calcDays(dateEntry: string): number {
@@ -44,12 +45,12 @@ export function getRowBg(status: string): string {
 // ── Plan Form (shared for Add and Edit within modal) ─────────────────────────
 
 interface PlanFormData {
-  dateEntry: string;
+  dateStr: string;
   name: string;
-  mobileNumber: string;
+  mobile: string;
   installment: string;
   plan: string;
-  billRefundStatus: string;
+  status: string;
 }
 
 function PlanInlineForm({
@@ -66,7 +67,7 @@ function PlanInlineForm({
   isSaving: boolean;
 }) {
   const [form, setForm] = useState<PlanFormData>(initial);
-  const days = form.dateEntry ? calcDays(form.dateEntry) : 0;
+  const days = form.dateStr ? calcDays(form.dateStr) : 0;
   const isOld = days >= 300;
 
   const set = (field: keyof PlanFormData, value: string) =>
@@ -86,8 +87,8 @@ function PlanInlineForm({
           <input
             id="pif-date"
             type="date"
-            value={form.dateEntry}
-            onChange={(e) => set("dateEntry", e.target.value)}
+            value={form.dateStr}
+            onChange={(e) => set("dateStr", e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
         </div>
@@ -101,7 +102,7 @@ function PlanInlineForm({
               isOld ? "text-destructive font-bold" : "text-muted-foreground"
             }`}
           >
-            {form.dateEntry ? `${days}d${isOld ? " ⚠" : ""}` : "—"}
+            {form.dateStr ? `${days}d${isOld ? " ⚠" : ""}` : "—"}
           </div>
         </div>
         {/* Name */}
@@ -130,12 +131,9 @@ function PlanInlineForm({
           </label>
           <Input
             id="pif-mobile"
-            value={form.mobileNumber}
+            value={form.mobile}
             onChange={(e) =>
-              set(
-                "mobileNumber",
-                e.target.value.replace(/\D/g, "").slice(0, 10),
-              )
+              set("mobile", e.target.value.replace(/\D/g, "").slice(0, 10))
             }
             placeholder="Mobile number"
             className="h-9 text-sm"
@@ -215,12 +213,13 @@ function MobileDetailModal({
   userMobile: string;
   onClose: () => void;
 }) {
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const { data: planOptions = [] } = useGetPlanOptions();
-  const allPlanOpts = planOptions.length > 0 ? planOptions : ["GHS", "RGA"];
+  const { data: planOpts = [] } = useGetPlanOptions();
+  const allPlanOpts =
+    planOpts.length > 0 ? planOpts.map((o) => o.optionLabel) : ["GHS", "RGA"];
 
   const updatePlan = useUpdatePlan(userMobile);
   const deletePlan = useDeletePlan(userMobile);
@@ -254,12 +253,12 @@ function MobileDetailModal({
       await updatePlan.mutateAsync({
         id: editingId,
         planData: {
-          dateEntry: data.dateEntry,
+          dateStr: data.dateStr,
           name: data.name,
-          mobileNumber: data.mobileNumber,
+          mobile: data.mobile,
           installment: data.installment,
           plan: data.plan,
-          billRefundStatus: data.billRefundStatus,
+          status: data.status,
         },
       });
       toast.success("Plan updated");
@@ -269,7 +268,7 @@ function MobileDetailModal({
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     try {
       await deletePlan.mutateAsync(id);
       toast.success("Plan deleted");
@@ -280,18 +279,18 @@ function MobileDetailModal({
   };
 
   const handleAdd = async (data: PlanFormData) => {
-    if (data.mobileNumber.length !== 10) {
+    if (data.mobile.length !== 10) {
       toast.error("Mobile number must be 10 digits");
       return;
     }
     try {
       await addPlan.mutateAsync({
-        dateEntry: data.dateEntry,
+        dateStr: data.dateStr,
         name: data.name,
-        mobileNumber: data.mobileNumber,
+        mobile: data.mobile,
         installment: data.installment,
         plan: data.plan,
-        billRefundStatus: data.billRefundStatus,
+        status: data.status,
       });
       toast.success("Plan added");
       setShowAddForm(false);
@@ -300,7 +299,7 @@ function MobileDetailModal({
     }
   };
 
-  const currentMatching = plans.filter((p) => p.mobileNumber === mobile);
+  const currentMatching = plans.filter((p) => p.mobile === mobile);
 
   return (
     <div
@@ -359,12 +358,12 @@ function MobileDetailModal({
               </p>
               <PlanInlineForm
                 initial={{
-                  dateEntry: "",
+                  dateStr: "",
                   name: "",
-                  mobileNumber: mobile,
+                  mobile: mobile,
                   installment: "",
                   plan: allPlanOpts[0] ?? "",
-                  billRefundStatus: "",
+                  status: "",
                 }}
                 planOptions={allPlanOpts}
                 onSave={handleAdd}
@@ -380,41 +379,41 @@ function MobileDetailModal({
             </p>
           ) : (
             currentMatching.map((p) => {
-              const days = calcDays(p.dateEntry);
+              const days = calcDays(p.dateStr);
               const isOld = days >= 300;
               const statusLabel =
-                p.billRefundStatus === "bill_done"
+                p.status === "bill_done"
                   ? "Bill Done"
-                  : p.billRefundStatus === "refund"
+                  : p.status === "refund"
                     ? "Refund"
                     : null;
-              const isEditing = editingId === p.id;
+              const isEditingEntry = editingId === p.id;
               const isConfirmDelete = confirmDeleteId === p.id;
 
               return (
                 <div
                   key={p.id}
                   className={`rounded-lg border border-border ${
-                    p.billRefundStatus === "bill_done"
+                    p.status === "bill_done"
                       ? "bg-blue-50"
-                      : p.billRefundStatus === "refund"
+                      : p.status === "refund"
                         ? "bg-red-50"
                         : "bg-background"
                   }`}
                 >
-                  {isEditing ? (
+                  {isEditingEntry ? (
                     <div className="p-4">
                       <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">
                         Edit Entry
                       </p>
                       <PlanInlineForm
                         initial={{
-                          dateEntry: p.dateEntry,
+                          dateStr: p.dateStr,
                           name: p.name,
-                          mobileNumber: p.mobileNumber,
+                          mobile: p.mobile,
                           installment: p.installment,
                           plan: p.plan,
-                          billRefundStatus: p.billRefundStatus,
+                          status: p.status,
                         }}
                         planOptions={allPlanOpts}
                         onSave={handleEdit}
@@ -438,7 +437,7 @@ function MobileDetailModal({
                           {statusLabel && (
                             <span
                               className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                p.billRefundStatus === "bill_done"
+                                p.status === "bill_done"
                                   ? "bg-blue-200 text-blue-800"
                                   : "bg-red-200 text-red-800"
                               }`}
@@ -482,13 +481,13 @@ function MobileDetailModal({
                           <span className="font-medium text-foreground">
                             Date:
                           </span>{" "}
-                          {p.dateEntry || "—"}
+                          {p.dateStr || "—"}
                         </span>
                         <span>
                           <span className="font-medium text-foreground">
                             Mobile:
                           </span>{" "}
-                          {p.mobileNumber || "—"}
+                          {p.mobile || "—"}
                         </span>
                         <span>
                           <span className="font-medium text-foreground">
@@ -570,9 +569,7 @@ function StatusPicker({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onDismiss();
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) onDismiss();
     };
     const keyHandler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onDismiss();
@@ -676,44 +673,52 @@ function DeleteAllModal({
 
 // ── Main Page ────────────────────────────────────────────────────────────────
 
-export function PlansPage({ userMobile }: PlansPageProps) {
+export function PlansPage({ userMobile, initialMobileSearch }: PlansPageProps) {
   const [search, setSearch] = useState("");
   const [filterPlan, setFilterPlan] = useState("all");
   const [selectedMobile, setSelectedMobile] = useState<string | null>(null);
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
 
+  // Open mobile popup when initialMobileSearch changes (from customer PLAN button)
+  useEffect(() => {
+    if (initialMobileSearch) {
+      setSelectedMobile(initialMobileSearch);
+    }
+  }, [initialMobileSearch]);
+
   const { data: plans = [], isLoading } = useGetAllPlans(userMobile);
-  const { data: planOptions = [] } = useGetPlanOptions();
+  const { data: planOpts = [] } = useGetPlanOptions();
   const deletePlan = useDeletePlan(userMobile);
   const deleteAllPlans = useDeleteAllPlans(userMobile);
   const addPlan = useAddPlan(userMobile);
-  const updatePlanStatus = useUpdatePlanStatus();
+  const updatePlanStatus = useUpdatePlanStatus(userMobile);
 
-  const allPlanOptions = planOptions.length > 0 ? planOptions : ["GHS", "RGA"];
+  const allPlanOptions =
+    planOpts.length > 0 ? planOpts.map((o) => o.optionLabel) : ["GHS", "RGA"];
 
   // Filter + search
   const filtered = plans.filter((p) => {
     const term = search.toLowerCase();
     const statusLabel =
-      p.billRefundStatus === "bill_done"
+      p.status === "bill_done"
         ? "bill done"
-        : p.billRefundStatus === "refund"
+        : p.status === "refund"
           ? "refund"
           : "";
     const matchSearch =
       !term ||
       p.name.toLowerCase().includes(term) ||
-      p.mobileNumber.includes(term) ||
+      p.mobile.includes(term) ||
       p.installment.toLowerCase().includes(term) ||
       p.plan.toLowerCase().includes(term) ||
-      p.dateEntry.includes(term) ||
+      p.dateStr.includes(term) ||
       statusLabel.includes(term);
     const matchPlan = filterPlan === "all" || p.plan === filterPlan;
     return matchSearch && matchPlan;
   });
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm("Delete this plan entry?")) return;
     try {
       await deletePlan.mutateAsync(id);
@@ -724,17 +729,16 @@ export function PlansPage({ userMobile }: PlansPageProps) {
   };
 
   const handleDeleteAll = async () => {
-    const ids = plans.map((p) => p.id);
     try {
-      await deleteAllPlans.mutateAsync(ids);
-      toast.success(`Deleted all ${ids.length} plan(s)`);
+      await deleteAllPlans.mutateAsync();
+      toast.success(`Deleted all ${plans.length} plan(s)`);
       setShowDeleteAllModal(false);
     } catch {
       toast.error("Failed to delete all plans");
     }
   };
 
-  const handleStatusChange = async (id: number, status: string) => {
+  const handleStatusChange = async (id: string, status: string) => {
     try {
       await updatePlanStatus.mutateAsync({ id, status });
       if (status === "bill_done") toast.success("Marked as Bill Done");
@@ -752,13 +756,13 @@ export function PlansPage({ userMobile }: PlansPageProps) {
       return;
     }
     const rows = plans.map((p) => ({
-      Date: p.dateEntry,
+      Date: p.dateStr,
       Name: p.name,
-      "Mobile Number": p.mobileNumber,
+      "Mobile Number": p.mobile,
       Installment: p.installment,
       Plan: p.plan,
-      Days: calcDays(p.dateEntry),
-      Status: p.billRefundStatus,
+      Days: calcDays(p.dateStr),
+      Status: p.status,
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -794,19 +798,19 @@ export function PlansPage({ userMobile }: PlansPageProps) {
 
         let imported = 0;
         for (const row of rows) {
-          const dateEntry = getField(row, "date");
+          const dateStr = getField(row, "date");
           const name = getField(row, "name");
-          const mobileNumber = getField(row, "mobile number", "mobile");
+          const mobile = getField(row, "mobile number", "mobile");
           const installment = getField(row, "installment");
           const plan = getField(row, "plan");
-          if (!dateEntry && !name && !mobileNumber) continue;
+          if (!dateStr && !name && !mobile) continue;
           await addPlan.mutateAsync({
-            dateEntry,
+            dateStr,
             name,
-            mobileNumber,
+            mobile,
             installment,
             plan,
-            billRefundStatus: "",
+            status: "",
           });
           imported++;
         }
@@ -875,8 +879,18 @@ export function PlansPage({ userMobile }: PlansPageProps) {
             placeholder="Search plans..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10"
+            className="pl-9 pr-9 h-10"
           />
+          {search && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <Select value={filterPlan} onValueChange={setFilterPlan}>
           <SelectTrigger
@@ -896,10 +910,32 @@ export function PlansPage({ userMobile }: PlansPageProps) {
         </Select>
       </div>
 
-      {/* Count */}
-      <p className="text-xs text-muted-foreground mb-3">
-        Showing {filtered.length} of {plans.length} plan(s)
-      </p>
+      {/* Stats bar */}
+      <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mb-4 text-xs text-muted-foreground">
+        <span className="font-medium">
+          Total:{" "}
+          <span className="text-foreground font-bold">{plans.length}</span> plan
+          {plans.length !== 1 ? "s" : ""}
+        </span>
+        {(search || filterPlan !== "all") && (
+          <span>
+            Showing:{" "}
+            <span className="text-foreground font-semibold">
+              {filtered.length}
+            </span>
+          </span>
+        )}
+        {plans.filter((p) => p.status === "bill_done").length > 0 && (
+          <span className="text-blue-700 font-semibold">
+            Bill Done: {plans.filter((p) => p.status === "bill_done").length}
+          </span>
+        )}
+        {plans.filter((p) => p.status === "refund").length > 0 && (
+          <span className="text-red-700 font-semibold">
+            Refund: {plans.filter((p) => p.status === "refund").length}
+          </span>
+        )}
+      </div>
 
       {/* Table */}
       {isLoading ? (
@@ -920,7 +956,7 @@ export function PlansPage({ userMobile }: PlansPageProps) {
           </p>
           <p className="text-sm text-muted-foreground max-w-xs">
             {plans.length === 0
-              ? "Add plans from the Entry Form page."
+              ? "No PLANS entries yet. Use the form below to add plans."
               : "Try adjusting your search or filter."}
           </p>
         </div>
@@ -997,46 +1033,29 @@ export function PlanTableRow({
 }: {
   plan: PlanWithId;
   allPlans: PlanWithId[];
-  onDelete: (id: number) => void;
-  onStatusChange: (id: number, status: string) => void;
+  onDelete: (id: string) => void;
+  onStatusChange: (id: string, status: string) => void;
   onMobileClick: (mobile: string) => void;
 }) {
   const [showPicker, setShowPicker] = useState(false);
-  const cellRef = useRef<HTMLTableCellElement>(null);
 
-  const days = calcDays(plan.dateEntry);
+  const days = calcDays(plan.dateStr);
   const isOld = days >= 300;
-  const status = plan.billRefundStatus;
+  const status = plan.status;
   const isBillDone = status === "bill_done";
   const isRefund = status === "refund";
   const hasStatus = isBillDone || isRefund;
   const rowBg = getRowBg(status);
-
-  const handleCheckboxChange = () => {
-    // Unchecked → show picker
-    setShowPicker(true);
-  };
-
-  const handleStatusBadgeClick = () => {
-    // Already has status → re-open picker to change or the user can clear
-    setShowPicker(true);
-  };
-
-  const handlePickerSelect = (newStatus: string) => {
-    setShowPicker(false);
-    onStatusChange(plan.id, newStatus);
-  };
 
   return (
     <tr
       data-ocid="plans.row"
       className={`border-b border-border transition-colors ${rowBg || "hover:bg-muted/30"}`}
     >
-      {/* Status cell — checkbox when no status; colored bold text when status set */}
-      <td ref={cellRef} className="px-3 py-3 relative">
+      {/* Status cell */}
+      <td className="px-3 py-3 relative">
         <div className="relative inline-block">
           {hasStatus ? (
-            // Show colored text label; clicking it re-opens the picker
             <button
               type="button"
               data-ocid="plans.status_label"
@@ -1045,7 +1064,7 @@ export function PlanTableRow({
                   ? "Bill Done — click to change"
                   : "Refund — click to change"
               }
-              onClick={handleStatusBadgeClick}
+              onClick={() => setShowPicker(true)}
               className={`text-xs font-bold px-2 py-1 rounded cursor-pointer select-none leading-tight transition-opacity hover:opacity-80 ${
                 isBillDone
                   ? "text-blue-700 bg-blue-100 border border-blue-300"
@@ -1055,19 +1074,21 @@ export function PlanTableRow({
               {isBillDone ? "BILL DONE" : "REFUND"}
             </button>
           ) : (
-            // Show checkbox when no status
             <input
               type="checkbox"
               data-ocid="plans.status_checkbox"
               checked={false}
-              onChange={handleCheckboxChange}
+              onChange={() => setShowPicker(true)}
               className="w-4 h-4 cursor-pointer accent-amber-500"
               aria-label="Set bill status"
             />
           )}
           {showPicker && (
             <StatusPicker
-              onSelect={handlePickerSelect}
+              onSelect={(newStatus) => {
+                setShowPicker(false);
+                onStatusChange(plan.id, newStatus);
+              }}
               onDismiss={() => setShowPicker(false)}
             />
           )}
@@ -1076,7 +1097,7 @@ export function PlanTableRow({
 
       {/* Date */}
       <td className="px-3 py-3 text-sm whitespace-nowrap text-foreground">
-        {plan.dateEntry || "—"}
+        {plan.dateStr || "—"}
       </td>
 
       {/* Name */}
@@ -1086,14 +1107,14 @@ export function PlanTableRow({
 
       {/* Mobile — clickable */}
       <td className="px-3 py-3 text-sm whitespace-nowrap">
-        {plan.mobileNumber ? (
+        {plan.mobile ? (
           <button
             type="button"
             data-ocid="plans.mobile_link"
-            onClick={() => onMobileClick(plan.mobileNumber)}
+            onClick={() => onMobileClick(plan.mobile)}
             className="text-amber-600 underline underline-offset-2 hover:text-amber-700 cursor-pointer font-medium transition-colors"
           >
-            {plan.mobileNumber}
+            {plan.mobile}
           </button>
         ) : (
           <span className="text-muted-foreground">—</span>

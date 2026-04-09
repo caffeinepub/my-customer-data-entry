@@ -1,115 +1,104 @@
-type UserPlanData = 
+type UserInfo = 
  record {
-   plans: vec PlanWithId;
-   userMobile: text;
- };
-type UserCustomerData = 
- record {
-   customers: vec CustomerWithId;
-   userMobile: text;
- };
-type User = 
- record {
-   createdAt: int;
    mobile: text;
    userName: text;
  };
 type TagOption = 
  record {
-   tagColor: text;
-   tagLabel: text;
+   color: text;
+   id: text;
+   optionLabel: text;
  };
+type Settings = record {ghRgaOptions: vec DropdownOption;};
 type PlanWithId = 
  record {
-   billRefundStatus: text;
-   dateEntry: text;
+   dateStr: text;
    daysCount: nat;
-   id: nat;
+   id: text;
    installment: text;
-   mobileNumber: text;
+   mobile: text;
    name: text;
    plan: text;
+   status: text;
  };
-type Plan = 
+type PlanOption = 
  record {
-   billRefundStatus: text;
-   dateEntry: text;
+   color: text;
+   id: text;
+   optionLabel: text;
+ };
+type PlanData = 
+ record {
+   dateStr: text;
    installment: text;
-   mobileNumber: text;
+   mobile: text;
    name: text;
    plan: text;
+   status: text;
  };
-type FieldDefinition = 
+type FieldDef = 
  record {
    fieldLabel: text;
    fieldType: text;
    id: text;
    order: nat;
+   required: bool;
+ };
+type DropdownOption = 
+ record {
+   color: text;
+   id: text;
+   optionLabel: text;
  };
 type CustomerWithId = 
  record {
-   address: text;
-   customFields: vec CustomField;
-   ghRga: text;
-   id: nat;
-   isHighlighted: bool;
-   mobileNumber: text;
-   name: text;
-   tag: text;
+   fields: vec record {
+                 text;
+                 text;
+               };
+   id: text;
  };
-type Customer = 
- record {
-   address: text;
-   customFields: vec CustomField;
-   ghRga: text;
-   isHighlighted: bool;
-   mobileNumber: text;
-   name: text;
-   tag: text;
- };
-type CustomField = 
- record {
-   fieldName: text;
-   fieldValue: text;
- };
+type CustomerData = record {fields: vec record {
+                                          text;
+                                          text;
+                                        };};
 service : {
-  addCustomer: (userMobile: text, customer: Customer) -> (nat);
-  addPlan: (userMobile: text, planData: Plan) -> (PlanWithId);
-  createUser: (adminMobile: text, newMobile: text, userName: text) ->
-   (record {
-      message: text;
-      ok: bool;
-    });
-  deleteCustomer: (userMobile: text, id: nat) -> (bool);
-  deletePlan: (userMobile: text, id: nat) -> (bool);
-  deleteUser: (adminMobile: text, mobile: text) ->
-   (record {
-      message: text;
-      ok: bool;
-    });
+  addCustomer: (mobile: text, data: CustomerData) -> (text);
+  addPlan: (mobile: text, plan: PlanData) -> (text);
+  createUser: (mobile: text, userName: text) -> (bool);
+  deleteAllPlans: (mobile: text) -> (bool);
+  deleteCustomer: (mobile: text, id: text) -> (bool);
+  deletePlan: (mobile: text, id: text) -> (bool);
+  deleteUser: (mobile: text) -> (bool);
   generateOtp: (mobile: text) -> (text);
-  getAllCustomers: (userMobile: text) -> (vec CustomerWithId) query;
-  getAllCustomersForAdmin: () -> (vec UserCustomerData) query;
-  getAllPlans: (userMobile: text) -> (vec PlanWithId) query;
-  getAllPlansForAdmin: () -> (vec UserPlanData) query;
-  getAllUsers: () -> (vec text) query;
+  getAllCustomers: (mobile: text) -> (vec CustomerWithId) query;
+  getAllCustomersForAdmin: () ->
+   (vec record {
+          text;
+          vec CustomerWithId;
+        }) query;
+  getAllPlans: (mobile: text) -> (vec PlanWithId) query;
+  getAllPlansForAdmin: () -> (vec record {
+                                    text;
+                                    vec PlanWithId;
+                                  }) query;
   getColorTheme: () -> (text) query;
-  getCustomer: (userMobile: text, id: nat) -> (opt CustomerWithId) query;
-  getCustomerCount: (userMobile: text) -> (nat) query;
-  getFieldDefinitions: () -> (vec FieldDefinition) query;
-  getPlan: (userMobile: text, id: nat) -> (opt PlanWithId) query;
-  getPlanOptions: () -> (vec text) query;
-  getRegisteredUsers: (adminMobile: text) -> (vec User) query;
-  getSettings: () -> (vec text) query;
+  getCustomer: (mobile: text, id: text) -> (opt CustomerWithId) query;
+  getCustomerCount: (mobile: text) -> (nat) query;
+  getFieldDefinitions: () -> (vec FieldDef) query;
+  getPlan: (mobile: text, id: text) -> (opt PlanWithId) query;
+  getPlanOptions: () -> (vec PlanOption) query;
+  getRegisteredUsers: () -> (vec UserInfo) query;
+  getSettings: () -> (Settings) query;
   getTagOptions: () -> (vec TagOption) query;
-  getUserName: (mobile: text) -> (text) query;
-  updateColorTheme: (theme: text) -> ();
-  updateCustomer: (userMobile: text, id: nat, customer: Customer) -> (bool);
-  updateFieldDefinitions: (fields: vec FieldDefinition) -> ();
-  updatePlan: (userMobile: text, id: nat, planData: Plan) -> (bool);
-  updatePlanOptions: (newOptions: vec text) -> ();
-  updatePlanStatus: (userMobile: text, id: nat, status: text) -> (bool);
-  updateSettings: (newSettings: vec text) -> ();
-  updateTagOptions: (newOptions: vec TagOption) -> ();
+  getUserName: (mobile: text) -> (opt text) query;
+  updateColorTheme: (theme: text) -> (bool);
+  updateCustomer: (mobile: text, id: text, data: CustomerData) -> (bool);
+  updateFieldDefinitions: (fields: vec FieldDef) -> (bool);
+  updatePlan: (mobile: text, id: text, plan: PlanData) -> (bool);
+  updatePlanOptions: (options: vec PlanOption) -> (bool);
+  updatePlanStatus: (mobile: text, id: text, status: text) -> (bool);
+  updateSettings: (s: Settings) -> (bool);
+  updateTagOptions: (options: vec TagOption) -> (bool);
   verifyOtp: (mobile: text, otp: text) -> (bool);
 }

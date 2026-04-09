@@ -1,4 +1,4 @@
-const SESSION_KEY = "customerapp_session";
+const SESSION_KEY = "customerHubSession";
 
 export interface Session {
   mobile: string;
@@ -30,6 +30,7 @@ export function useAuth(): {
       loggedInAt: Date.now(),
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(newSession));
+    window.location.reload();
   };
 
   const logout = () => {

@@ -1,91 +1,87 @@
 import Text "mo:core/Text";
-import Order "mo:core/Order";
+import _Order "mo:core/Order";
 import List "mo:core/List";
 import Map "mo:core/Map";
 import Nat "mo:core/Nat";
+import Int "mo:core/Int";
 import Time "mo:core/Time";
+import Migration "migration";
 
-
-
+(with migration = Migration.run)
 actor {
   // ─── Types ───────────────────────────────────────────────────────────────
 
-  type CustomField = {
-    fieldName : Text;
-    fieldValue : Text;
-  };
-
-  type Customer = {
-    name : Text;
-    mobileNumber : Text;
-    tag : Text;
-    ghRga : Text;
-    address : Text;
-    isHighlighted : Bool;
-    customFields : [CustomField];
+  /// Flexible customer data — all fields as key-value pairs
+  type CustomerData = {
+    fields : [(Text, Text)];
   };
 
   type CustomerWithId = {
-    id : Nat;
-    name : Text;
-    mobileNumber : Text;
-    tag : Text;
-    ghRga : Text;
-    address : Text;
-    isHighlighted : Bool;
-    customFields : [CustomField];
+    id : Text;
+    fields : [(Text, Text)];
+  };
+
+  type DropdownOption = {
+    id : Text;
+    optionLabel : Text;
+    color : Text;
+  };
+
+  type Settings = {
+    ghRgaOptions : [DropdownOption];
   };
 
   type TagOption = {
-    tagLabel : Text;
-    tagColor : Text;
+    id : Text;
+    optionLabel : Text;
+    color : Text;
   };
 
-  type FieldDefinition = {
+  type FieldDef = {
     id : Text;
     fieldLabel : Text;
     fieldType : Text;
+    required : Bool;
     order : Nat;
   };
 
-  type UserCustomerData = {
-    userMobile : Text;
-    customers : [CustomerWithId];
+  type UserInfo = {
+    mobile : Text;
+    userName : Text;
   };
-
-  // ─── Plan Types ──────────────────────────────────────────────────────────
-
-  type Plan = {
-    dateEntry : Text;
-    name : Text;
-    mobileNumber : Text;
-    installment : Text;
-    plan : Text;
-    billRefundStatus : Text;
-  };
-
-  type PlanWithId = {
-    id : Nat;
-    dateEntry : Text;
-    name : Text;
-    mobileNumber : Text;
-    installment : Text;
-    plan : Text;
-    daysCount : Nat;
-    billRefundStatus : Text;
-  };
-
-  type UserPlanData = {
-    userMobile : Text;
-    plans : [PlanWithId];
-  };
-
-  // ─── User Registry ────────────────────────────────────────────────────────
 
   type User = {
     mobile : Text;
     userName : Text;
     createdAt : Int;
+  };
+
+  // ─── Plan Types ──────────────────────────────────────────────────────────
+
+  type PlanData = {
+    dateStr : Text;
+    name : Text;
+    mobile : Text;
+    installment : Text;
+    plan : Text;
+    status : Text;
+  };
+
+  type PlanWithId = {
+    id : Text;
+    dateStr : Text;
+    name : Text;
+    mobile : Text;
+    installment : Text;
+    plan : Text;
+    status : Text;
+    daysCount : Nat;
+  };
+
+  type PlanOption = {
+    id : Text;
+    optionLabel : Text;
+    color : Text;
   };
 
   // ─── Constants ───────────────────────────────────────────────────────────
@@ -94,10 +90,10 @@ actor {
 
   // ─── State ───────────────────────────────────────────────────────────────
 
-  // Per-user customer storage: mobile -> (id -> Customer)
-  let userCustomers = Map.empty<Text, Map.Map<Nat, Customer>>();
+  // Per-user customer storage: mobile -> (id -> CustomerData)
+  let userCustomers = Map.empty<Text, Map.Map<Text, CustomerData>>();
 
-  // Per-user ID counters: mobile -> nextId
+  // Per-user ID counters: mobile -> nextId (Nat, converted to Text when used)
   let userIdCounters = Map.empty<Text, Nat>();
 
   // OTP store: mobile -> otp
@@ -106,84 +102,126 @@ actor {
   // Registered users: mobile -> User
   let registeredUsers = Map.empty<Text, User>();
 
-  // Legacy flat customer storage (migrated on first call)
-  let legacyCustomers = Map.empty<Nat, Customer>();
-  let legacyIdCounter = 0;
-  var legacyMigrated = false;
+  // Per-user plan storage: mobile -> (id -> PlanData)
+  let userPlans = Map.empty<Text, Map.Map<Text, PlanData>>();
 
-  // Per-user plan storage: mobile -> (id -> Plan)
-  let userPlans = Map.empty<Text, Map.Map<Nat, Plan>>();
-
-  // Per-user plan ID counters: mobile -> nextId
+  // Per-user plan ID counters
   let userPlanCounters = Map.empty<Text, Nat>();
 
   // Global plan dropdown options
-  let planOptions = List.fromArray(["GHS", "RGA"]);
-
-  // Global settings
-  let settings = List.fromArray(["GH", "RGA", "CLOSE", "NOT INTERESTED"]);
-  let tagOptions = List.fromArray<TagOption>([
-    { tagLabel = "Purple"; tagColor = "purple" },
-    { tagLabel = "Regular"; tagColor = "default" },
+  let planOptionsList = List.fromArray<PlanOption>([
+    { id = "ghs"; optionLabel = "GHS"; color = "green" },
+    { id = "rga"; optionLabel = "RGA"; color = "blue" },
   ]);
-  let fieldDefinitions = List.empty<FieldDefinition>();
+
+  // Global GH/RGA dropdown options
+  let ghRgaOptions = List.fromArray<DropdownOption>([
+    { id = "gh"; optionLabel = "GH"; color = "green" },
+    { id = "rga"; optionLabel = "RGA"; color = "blue" },
+    { id = "close"; optionLabel = "CLOSE"; color = "red" },
+    { id = "not_interested"; optionLabel = "NOT INTERESTED"; color = "gray" },
+  ]);
+
+  // Global tag options
+  let tagOptionsList = List.fromArray<TagOption>([
+    { id = "purple"; optionLabel = "Purple"; color = "purple" },
+    { id = "regular"; optionLabel = "Regular"; color = "default" },
+  ]);
+
+  // Global field definitions
+  let fieldDefsList = List.empty<FieldDef>();
+
+  // Color theme
   var colorTheme = "orange";
+
+  // OTP seed for generation
+  var otpSeed : Nat = 100000;
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  func getUserMap(userMobile : Text) : Map.Map<Nat, Customer> {
+  func getUserCustomerMap(userMobile : Text) : Map.Map<Text, CustomerData> {
     switch (userCustomers.get(userMobile)) {
       case (?m) m;
       case null {
-        let m = Map.empty<Nat, Customer>();
+        let m = Map.empty<Text, CustomerData>();
         userCustomers.add(userMobile, m);
         m;
       };
     };
   };
 
-  func getNextId(userMobile : Text) : Nat {
+  func getNextCustomerId(userMobile : Text) : Text {
     let current = switch (userIdCounters.get(userMobile)) {
       case (?n) n;
       case null 0;
     };
-    userIdCounters.add(userMobile, current + 1);
-    current;
+    let nextId = current + 1;
+    userIdCounters.add(userMobile, nextId);
+    userMobile # "_c_" # nextId.toText();
   };
 
-  func customerToWithId(id : Nat, c : Customer) : CustomerWithId {
-    { id; name = c.name; mobileNumber = c.mobileNumber; tag = c.tag; ghRga = c.ghRga; address = c.address; isHighlighted = c.isHighlighted; customFields = c.customFields };
-  };
-
-  func compareCustomerWithId(c1 : CustomerWithId, c2 : CustomerWithId) : Order.Order {
-    Text.compare(c1.name, c2.name);
-  };
-
-  // Migrate any legacy flat customers to the "legacy" user slot
-  func ensureLegacyMigrated() {
-    if (not legacyMigrated) {
-      if (not legacyCustomers.isEmpty()) {
-        let legacyMap = getUserMap("legacy");
-        legacyCustomers.forEach(func(id, c) {
-          legacyMap.add(id, c);
-        });
-        switch (userIdCounters.get("legacy")) {
-          case null { userIdCounters.add("legacy", legacyIdCounter) };
-          case _ {};
-        };
+  func getUserPlanMap(userMobile : Text) : Map.Map<Text, PlanData> {
+    switch (userPlans.get(userMobile)) {
+      case (?m) m;
+      case null {
+        let m = Map.empty<Text, PlanData>();
+        userPlans.add(userMobile, m);
+        m;
       };
-      legacyMigrated := true;
     };
   };
 
-  // Simple deterministic OTP derivation — returns 6-digit code
-  // We XOR the mobile digits together with a counter seed for variety
-  var otpSeed : Nat = 100000;
+  func getNextPlanId(userMobile : Text) : Text {
+    let current = switch (userPlanCounters.get(userMobile)) {
+      case (?n) n;
+      case null 0;
+    };
+    let nextId = current + 1;
+    userPlanCounters.add(userMobile, nextId);
+    userMobile # "_p_" # nextId.toText();
+  };
+
+  // ─── Day calculation for PLANS ────────────────────────────────────────────
+
+  func todayDays() : Nat {
+    let nowSec : Int = Time.now() / 1_000_000_000;
+    let days : Int = nowSec / 86400;
+    // Unix epoch is 1970-01-01; no offset needed — just use days from epoch
+    if (days < 0) 0 else days.toNat();
+  };
+
+  func parseDateToDays(dateStr : Text) : Nat {
+    let parts = dateStr.split(#char '-').toArray();
+    if (parts.size() != 3) return 0;
+    let year = switch (Nat.fromText(parts[0])) { case (?n) n; case null return 0 };
+    let month = switch (Nat.fromText(parts[1])) { case (?n) n; case null return 0 };
+    let day = switch (Nat.fromText(parts[2])) { case (?n) n; case null return 0 };
+    if (year < 1970) return 0;
+    let y : Nat = year - 1970;
+    let leaps = y / 4;
+    let yearDays = y * 365 + leaps;
+    let monthDays : Nat = switch (month) {
+      case 1 0; case 2 31; case 3 59; case 4 90;
+      case 5 120; case 6 151; case 7 181; case 8 212;
+      case 9 243; case 10 273; case 11 304; case 12 334;
+      case _ 0;
+    };
+    yearDays + monthDays + day;
+  };
+
+  func calcDaysCount(dateStr : Text) : Nat {
+    let entryDays = parseDateToDays(dateStr);
+    let today = todayDays();
+    if (today > entryDays) today - entryDays else 0;
+  };
+
+  func planToWithId(id : Text, p : PlanData) : PlanWithId {
+    { id; dateStr = p.dateStr; name = p.name; mobile = p.mobile; installment = p.installment; plan = p.plan; status = p.status; daysCount = calcDaysCount(p.dateStr) };
+  };
 
   func generateOtpCode() : Text {
     otpSeed := (otpSeed * 1664525 + 1013904223) % 1000000;
     let code = otpSeed;
-    // Pad to 6 digits
     if (code < 10) "00000" # code.toText()
     else if (code < 100) "0000" # code.toText()
     else if (code < 1000) "000" # code.toText()
@@ -194,16 +232,11 @@ actor {
 
   // ─── OTP / Auth ──────────────────────────────────────────────────────────
 
-  // Generates a 6-digit OTP for the mobile, stores it, and returns it
-  // so the frontend can display it to the user.
-  // Only registered users (and the admin) can request an OTP.
-  // Returns "NOT_REGISTERED" if the mobile is not registered and is not admin.
   public shared ({ caller = _ }) func generateOtp(mobile : Text) : async Text {
     // Auto-register the admin mobile if not yet present
     if (mobile == _ADMIN_MOBILE and not registeredUsers.containsKey(_ADMIN_MOBILE)) {
       registeredUsers.add(_ADMIN_MOBILE, { mobile = _ADMIN_MOBILE; userName = "Administrator"; createdAt = Time.now() });
     };
-    // Block non-registered, non-admin mobiles
     if (not registeredUsers.containsKey(mobile)) {
       return "NOT_REGISTERED";
     };
@@ -212,45 +245,71 @@ actor {
     otp;
   };
 
-  // Verifies the OTP; removes it after first successful use
   public shared ({ caller = _ }) func verifyOtp(mobile : Text, otp : Text) : async Bool {
     switch (otpStore.get(mobile)) {
       case (?stored) {
         if (stored == otp) {
           otpStore.remove(mobile);
           true;
-        } else {
-          false;
-        };
+        } else false;
       };
       case null false;
     };
   };
 
+  // ─── User Management ─────────────────────────────────────────────────────
+
+  public shared ({ caller = _ }) func createUser(mobile : Text, userName : Text) : async Bool {
+    // Ensure admin is auto-created
+    if (not registeredUsers.containsKey(_ADMIN_MOBILE)) {
+      registeredUsers.add(_ADMIN_MOBILE, { mobile = _ADMIN_MOBILE; userName = "Administrator"; createdAt = Time.now() });
+    };
+    if (registeredUsers.containsKey(mobile)) {
+      return false;
+    };
+    registeredUsers.add(mobile, { mobile; userName; createdAt = Time.now() });
+    true;
+  };
+
+  public query ({ caller = _ }) func getUserName(mobile : Text) : async ?Text {
+    switch (registeredUsers.get(mobile)) {
+      case (?user) ?user.userName;
+      case null null;
+    };
+  };
+
+  public query ({ caller = _ }) func getRegisteredUsers() : async [UserInfo] {
+    registeredUsers.values().map(func(u : User) : UserInfo { { mobile = u.mobile; userName = u.userName } }).toArray();
+  };
+
+  public shared ({ caller = _ }) func deleteUser(mobile : Text) : async Bool {
+    if (mobile == _ADMIN_MOBILE) return false;
+    if (not registeredUsers.containsKey(mobile)) return false;
+    registeredUsers.remove(mobile);
+    true;
+  };
+
   // ─── Customer CRUD (per-user) ─────────────────────────────────────────────
 
-  public shared ({ caller = _ }) func addCustomer(userMobile : Text, customer : Customer) : async Nat {
-    ensureLegacyMigrated();
-    let userMap = getUserMap(userMobile);
-    let id = getNextId(userMobile);
-    userMap.add(id, customer);
+  public shared ({ caller = _ }) func addCustomer(mobile : Text, data : CustomerData) : async Text {
+    let userMap = getUserCustomerMap(mobile);
+    let id = getNextCustomerId(mobile);
+    userMap.add(id, data);
     id;
   };
 
-  public shared ({ caller = _ }) func updateCustomer(userMobile : Text, id : Nat, customer : Customer) : async Bool {
-    ensureLegacyMigrated();
-    let userMap = getUserMap(userMobile);
+  public shared ({ caller = _ }) func updateCustomer(mobile : Text, id : Text, data : CustomerData) : async Bool {
+    let userMap = getUserCustomerMap(mobile);
     if (not userMap.containsKey(id)) {
       false;
     } else {
-      userMap.add(id, customer);
+      userMap.add(id, data);
       true;
     };
   };
 
-  public shared ({ caller = _ }) func deleteCustomer(userMobile : Text, id : Nat) : async Bool {
-    ensureLegacyMigrated();
-    let userMap = getUserMap(userMobile);
+  public shared ({ caller = _ }) func deleteCustomer(mobile : Text, id : Text) : async Bool {
+    let userMap = getUserCustomerMap(mobile);
     if (not userMap.containsKey(id)) {
       false;
     } else {
@@ -259,11 +318,11 @@ actor {
     };
   };
 
-  public query ({ caller = _ }) func getCustomer(userMobile : Text, id : Nat) : async ?CustomerWithId {
-    switch (userCustomers.get(userMobile)) {
+  public query ({ caller = _ }) func getCustomer(mobile : Text, id : Text) : async ?CustomerWithId {
+    switch (userCustomers.get(mobile)) {
       case (?userMap) {
         switch (userMap.get(id)) {
-          case (?c) ?customerToWithId(id, c);
+          case (?d) ?{ id; fields = d.fields };
           case null null;
         };
       };
@@ -271,132 +330,86 @@ actor {
     };
   };
 
-  public query ({ caller = _ }) func getAllCustomers(userMobile : Text) : async [CustomerWithId] {
-    switch (userCustomers.get(userMobile)) {
+  public query ({ caller = _ }) func getAllCustomers(mobile : Text) : async [CustomerWithId] {
+    switch (userCustomers.get(mobile)) {
       case (?userMap) {
-        let withIds = userMap.entries().map(func((id, c) : (Nat, Customer)) : CustomerWithId {
-          customerToWithId(id, c)
+        userMap.entries().map(func((id, d) : (Text, CustomerData)) : CustomerWithId {
+          { id; fields = d.fields }
         }).toArray();
-        withIds.sort(compareCustomerWithId);
       };
       case null [];
     };
   };
 
-  // ─── Admin Methods ────────────────────────────────────────────────────────
-
-  // Returns all mobile numbers that have any customers
-  public query ({ caller = _ }) func getAllUsers() : async [Text] {
-    userCustomers.keys().toArray();
-  };
-
-  // Returns the customer count for a given user
-  public query ({ caller = _ }) func getCustomerCount(userMobile : Text) : async Nat {
-    switch (userCustomers.get(userMobile)) {
+  public query ({ caller = _ }) func getCustomerCount(mobile : Text) : async Nat {
+    switch (userCustomers.get(mobile)) {
       case (?userMap) userMap.size();
       case null 0;
     };
   };
 
-  // Returns all users with all their customers (admin use)
-  public query ({ caller = _ }) func getAllCustomersForAdmin() : async [UserCustomerData] {
-    userCustomers.entries().map(func((mobile, userMap) : (Text, Map.Map<Nat, Customer>)) : UserCustomerData {
-      let withIds = userMap.entries().map(func((id, c) : (Nat, Customer)) : CustomerWithId {
-        customerToWithId(id, c)
-      }).toArray();
-      { userMobile = mobile; customers = withIds.sort(compareCustomerWithId) };
-    }).toArray();
-  };
-
-  // ─── User Management ─────────────────────────────────────────────────────
-
-  // Admin-only: create a new registered user
-  public shared ({ caller = _ }) func createUser(adminMobile : Text, newMobile : Text, userName : Text) : async { ok : Bool; message : Text } {
-    if (adminMobile != _ADMIN_MOBILE) {
-      return { ok = false; message = "Only admin can create users" };
-    };
-    if (registeredUsers.containsKey(newMobile)) {
-      return { ok = false; message = "Mobile number already registered" };
-    };
-    registeredUsers.add(newMobile, { mobile = newMobile; userName; createdAt = Time.now() });
-    { ok = true; message = "User created successfully" };
-  };
-
-  // Returns the user's name, or their mobile number as fallback
-  public query ({ caller = _ }) func getUserName(mobile : Text) : async Text {
-    switch (registeredUsers.get(mobile)) {
-      case (?user) user.userName;
-      case null mobile;
-    };
-  };
-
-  // Admin-only: list all registered users with names
-  public query ({ caller = _ }) func getRegisteredUsers(adminMobile : Text) : async [User] {
-    if (adminMobile != _ADMIN_MOBILE) {
-      return [];
-    };
-    registeredUsers.values().toArray();
-  };
-
-  // Admin-only: delete a user (cannot delete the admin account)
-  public shared ({ caller = _ }) func deleteUser(adminMobile : Text, mobile : Text) : async { ok : Bool; message : Text } {
-    if (adminMobile != _ADMIN_MOBILE) {
-      return { ok = false; message = "Only admin can delete users" };
-    };
-    if (mobile == _ADMIN_MOBILE) {
-      return { ok = false; message = "Cannot delete admin account" };
-    };
-    registeredUsers.remove(mobile);
-    { ok = true; message = "User deleted successfully" };
+  public query ({ caller = _ }) func getAllCustomersForAdmin() : async [(Text, [CustomerWithId])] {
+    let result = List.empty<(Text, [CustomerWithId])>();
+    userCustomers.forEach(func(mob : Text, userMap : Map.Map<Text, CustomerData>) {
+      let withIds = List.empty<CustomerWithId>();
+      userMap.forEach(func(id : Text, d : CustomerData) {
+        withIds.add({ id; fields = d.fields });
+      });
+      result.add((mob, withIds.toArray()));
+    });
+    result.toArray();
   };
 
   // ─── Settings (GH/RGA) ────────────────────────────────────────────────────
 
-  public shared ({ caller = _ }) func updateSettings(newSettings : [Text]) : async () {
-    settings.clear();
-    for (setting in newSettings.values()) {
-      settings.add(setting);
-    };
+  public query ({ caller = _ }) func getSettings() : async Settings {
+    { ghRgaOptions = ghRgaOptions.toArray() };
   };
 
-  public query ({ caller = _ }) func getSettings() : async [Text] {
-    settings.toArray();
+  public shared ({ caller = _ }) func updateSettings(s : Settings) : async Bool {
+    ghRgaOptions.clear();
+    for (opt in s.ghRgaOptions.values()) {
+      ghRgaOptions.add(opt);
+    };
+    true;
   };
 
   // ─── Tag Options ─────────────────────────────────────────────────────────
 
-  public shared ({ caller = _ }) func updateTagOptions(newOptions : [TagOption]) : async () {
-    tagOptions.clear();
-    for (opt in newOptions.values()) {
-      tagOptions.add(opt);
-    };
+  public query ({ caller = _ }) func getTagOptions() : async [TagOption] {
+    tagOptionsList.toArray();
   };
 
-  public query ({ caller = _ }) func getTagOptions() : async [TagOption] {
-    tagOptions.toArray();
+  public shared ({ caller = _ }) func updateTagOptions(options : [TagOption]) : async Bool {
+    tagOptionsList.clear();
+    for (opt in options.values()) {
+      tagOptionsList.add(opt);
+    };
+    true;
   };
 
   // ─── Field Definitions ────────────────────────────────────────────────────
 
-  public query ({ caller = _ }) func getFieldDefinitions() : async [FieldDefinition] {
-    if (fieldDefinitions.isEmpty()) {
+  public query ({ caller = _ }) func getFieldDefinitions() : async [FieldDef] {
+    if (fieldDefsList.isEmpty()) {
       [
-        { id = "name"; fieldLabel = "Name"; fieldType = "text"; order = 0 },
-        { id = "mobileNo"; fieldLabel = "Mobile No"; fieldType = "text"; order = 1 },
-        { id = "tag"; fieldLabel = "Tag"; fieldType = "text"; order = 2 },
-        { id = "ghRga"; fieldLabel = "GH/RGA"; fieldType = "text"; order = 3 },
-        { id = "address"; fieldLabel = "Address"; fieldType = "text"; order = 4 },
+        { id = "name"; fieldLabel = "Name"; fieldType = "text"; required = true; order = 0 },
+        { id = "mobileNo"; fieldLabel = "Mobile No"; fieldType = "text"; required = true; order = 1 },
+        { id = "tag"; fieldLabel = "Tag"; fieldType = "text"; required = false; order = 2 },
+        { id = "ghRga"; fieldLabel = "GH/RGA"; fieldType = "dropdown"; required = false; order = 3 },
+        { id = "address"; fieldLabel = "Address"; fieldType = "text"; required = false; order = 4 },
       ]
     } else {
-      fieldDefinitions.toArray();
+      fieldDefsList.toArray();
     };
   };
 
-  public shared ({ caller = _ }) func updateFieldDefinitions(fields : [FieldDefinition]) : async () {
-    fieldDefinitions.clear();
+  public shared ({ caller = _ }) func updateFieldDefinitions(fields : [FieldDef]) : async Bool {
+    fieldDefsList.clear();
     for (field in fields.values()) {
-      fieldDefinitions.add(field);
+      fieldDefsList.add(field);
     };
+    true;
   };
 
   // ─── Color Theme ─────────────────────────────────────────────────────────
@@ -405,96 +418,32 @@ actor {
     colorTheme;
   };
 
-  public shared ({ caller = _ }) func updateColorTheme(theme : Text) : async () {
+  public shared ({ caller = _ }) func updateColorTheme(theme : Text) : async Bool {
     colorTheme := theme;
+    true;
   };
 
-  // ─── Plan Helpers ─────────────────────────────────────────────────────────
+  // ─── Plan CRUD (per-user) ─────────────────────────────────────────────────
 
-  // Returns today's day count since a fixed epoch (days since 2000-01-01)
-  // Uses simple integer arithmetic approximation
-  func todayDays() : Nat {
-    let nowSec : Int = Time.now() / 1_000_000_000;
-    let days : Int = nowSec / 86400;
-    // Unix epoch days to 2000-01-01: 10957 days
-    let sinceEpoch : Int = days - 10957;
-    if (sinceEpoch < 0) 0 else sinceEpoch.toNat();
+  public shared ({ caller = _ }) func addPlan(mobile : Text, plan : PlanData) : async Text {
+    let planMap = getUserPlanMap(mobile);
+    let id = getNextPlanId(mobile);
+    planMap.add(id, plan);
+    id;
   };
 
-  // Parse "YYYY-MM-DD" and return days since 2000-01-01 (approximation)
-  // Uses: year*365 + leapYears + monthDays + day
-  func parseDateToDays(dateStr : Text) : Nat {
-    let parts = dateStr.split(#char '-').toArray();
-    if (parts.size() != 3) return 0;
-    let year = switch (Nat.fromText(parts[0])) { case (?n) n; case null return 0 };
-    let month = switch (Nat.fromText(parts[1])) { case (?n) n; case null return 0 };
-    let day = switch (Nat.fromText(parts[2])) { case (?n) n; case null return 0 };
-    if (year < 2000) return 0;
-    let y : Nat = year - 2000;
-    // Days from year offset (365*y + approx leap years)
-    let leaps = y / 4;
-    let yearDays = y * 365 + leaps;
-    // Days from months (non-leap approximation)
-    let monthDays : Nat = switch (month) {
-      case 1 0; case 2 31; case 3 59; case 4 90;
-      case 5 120; case 6 151; case 7 181; case 8 212;
-      case 9 243; case 10 273; case 11 304; case 12 334;
-      case _ 0;
-    };
-    yearDays + monthDays + day;
-  };
-
-  func calcDaysCount(dateEntry : Text) : Nat {
-    let entryDays = parseDateToDays(dateEntry);
-    let today = todayDays();
-    if (today > entryDays) today - entryDays else 0;
-  };
-
-  func getUserPlanMap(userMobile : Text) : Map.Map<Nat, Plan> {
-    switch (userPlans.get(userMobile)) {
-      case (?m) m;
-      case null {
-        let m = Map.empty<Nat, Plan>();
-        userPlans.add(userMobile, m);
-        m;
-      };
-    };
-  };
-
-  func getNextPlanId(userMobile : Text) : Nat {
-    let current = switch (userPlanCounters.get(userMobile)) {
-      case (?n) n;
-      case null 0;
-    };
-    userPlanCounters.add(userMobile, current + 1);
-    current;
-  };
-
-  func planToWithId(id : Nat, p : Plan) : PlanWithId {
-    { id; dateEntry = p.dateEntry; name = p.name; mobileNumber = p.mobileNumber; installment = p.installment; plan = p.plan; daysCount = calcDaysCount(p.dateEntry); billRefundStatus = p.billRefundStatus };
-  };
-
-  // ─── Plan CRUD ────────────────────────────────────────────────────────────
-
-  public shared ({ caller = _ }) func addPlan(userMobile : Text, planData : Plan) : async PlanWithId {
-    let planMap = getUserPlanMap(userMobile);
-    let id = getNextPlanId(userMobile);
-    planMap.add(id, planData);
-    planToWithId(id, planData);
-  };
-
-  public shared ({ caller = _ }) func updatePlan(userMobile : Text, id : Nat, planData : Plan) : async Bool {
-    let planMap = getUserPlanMap(userMobile);
+  public shared ({ caller = _ }) func updatePlan(mobile : Text, id : Text, plan : PlanData) : async Bool {
+    let planMap = getUserPlanMap(mobile);
     if (not planMap.containsKey(id)) {
       false;
     } else {
-      planMap.add(id, planData);
+      planMap.add(id, plan);
       true;
     };
   };
 
-  public shared ({ caller = _ }) func deletePlan(userMobile : Text, id : Nat) : async Bool {
-    let planMap = getUserPlanMap(userMobile);
+  public shared ({ caller = _ }) func deletePlan(mobile : Text, id : Text) : async Bool {
+    let planMap = getUserPlanMap(mobile);
     if (not planMap.containsKey(id)) {
       false;
     } else {
@@ -503,19 +452,29 @@ actor {
     };
   };
 
-  public shared ({ caller = _ }) func updatePlanStatus(userMobile : Text, id : Nat, status : Text) : async Bool {
-    let planMap = getUserPlanMap(userMobile);
+  public shared ({ caller = _ }) func deleteAllPlans(mobile : Text) : async Bool {
+    switch (userPlans.get(mobile)) {
+      case (?planMap) {
+        planMap.clear();
+        true;
+      };
+      case null true;
+    };
+  };
+
+  public shared ({ caller = _ }) func updatePlanStatus(mobile : Text, id : Text, status : Text) : async Bool {
+    let planMap = getUserPlanMap(mobile);
     switch (planMap.get(id)) {
       case (?p) {
-        planMap.add(id, { p with billRefundStatus = status });
+        planMap.add(id, { p with status });
         true;
       };
       case null false;
     };
   };
 
-  public query ({ caller = _ }) func getPlan(userMobile : Text, id : Nat) : async ?PlanWithId {
-    switch (userPlans.get(userMobile)) {
+  public query ({ caller = _ }) func getPlan(mobile : Text, id : Text) : async ?PlanWithId {
+    switch (userPlans.get(mobile)) {
       case (?planMap) {
         switch (planMap.get(id)) {
           case (?p) ?planToWithId(id, p);
@@ -526,10 +485,10 @@ actor {
     };
   };
 
-  public query ({ caller = _ }) func getAllPlans(userMobile : Text) : async [PlanWithId] {
-    switch (userPlans.get(userMobile)) {
+  public query ({ caller = _ }) func getAllPlans(mobile : Text) : async [PlanWithId] {
+    switch (userPlans.get(mobile)) {
       case (?planMap) {
-        planMap.entries().map(func((id, p) : (Nat, Plan)) : PlanWithId {
+        planMap.entries().map(func((id, p) : (Text, PlanData)) : PlanWithId {
           planToWithId(id, p)
         }).toArray();
       };
@@ -537,26 +496,30 @@ actor {
     };
   };
 
-  public query ({ caller = _ }) func getAllPlansForAdmin() : async [UserPlanData] {
-    userPlans.entries().map(func((mobile, planMap) : (Text, Map.Map<Nat, Plan>)) : UserPlanData {
-      let plans = planMap.entries().map(func((id, p) : (Nat, Plan)) : PlanWithId {
-        planToWithId(id, p)
-      }).toArray();
-      { userMobile = mobile; plans };
-    }).toArray();
+  public query ({ caller = _ }) func getAllPlansForAdmin() : async [(Text, [PlanWithId])] {
+    let result = List.empty<(Text, [PlanWithId])>();
+    userPlans.forEach(func(mob : Text, planMap : Map.Map<Text, PlanData>) {
+      let plans = List.empty<PlanWithId>();
+      planMap.forEach(func(id : Text, p : PlanData) {
+        plans.add(planToWithId(id, p));
+      });
+      result.add((mob, plans.toArray()));
+    });
+    result.toArray();
   };
 
   // ─── Plan Options ─────────────────────────────────────────────────────────
 
-  public query ({ caller = _ }) func getPlanOptions() : async [Text] {
-    planOptions.toArray();
+  public query ({ caller = _ }) func getPlanOptions() : async [PlanOption] {
+    planOptionsList.toArray();
   };
 
-  public shared ({ caller = _ }) func updatePlanOptions(newOptions : [Text]) : async () {
-    planOptions.clear();
-    for (opt in newOptions.values()) {
-      planOptions.add(opt);
+  public shared ({ caller = _ }) func updatePlanOptions(options : [PlanOption]) : async Bool {
+    planOptionsList.clear();
+    for (opt in options.values()) {
+      planOptionsList.add(opt);
     };
+    true;
   };
 
 };

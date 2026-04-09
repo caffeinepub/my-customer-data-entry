@@ -8,105 +8,89 @@ export interface None {
 }
 export type Option<T> = Some<T> | None;
 export interface TagOption {
-    tagColor: string;
-    tagLabel: string;
+    id: string;
+    optionLabel: string;
+    color: string;
 }
-export interface Plan {
+export interface Settings {
+    ghRgaOptions: Array<DropdownOption>;
+}
+export interface CustomerWithId {
+    id: string;
+    fields: Array<[string, string]>;
+}
+export interface DropdownOption {
+    id: string;
+    optionLabel: string;
+    color: string;
+}
+export interface PlanWithId {
+    id: string;
+    status: string;
+    dateStr: string;
     name: string;
     plan: string;
-    dateEntry: string;
-    mobileNumber: string;
     installment: string;
-    billRefundStatus: string;
+    daysCount: bigint;
+    mobile: string;
 }
-export interface FieldDefinition {
+export interface CustomerData {
+    fields: Array<[string, string]>;
+}
+export interface FieldDef {
     id: string;
     order: bigint;
     fieldLabel: string;
+    required: boolean;
     fieldType: string;
 }
-export interface CustomerWithId {
-    id: bigint;
-    tag: string;
-    name: string;
-    mobileNumber: string;
-    isHighlighted: boolean;
-    customFields: Array<CustomField>;
-    ghRga: string;
-    address: string;
-}
-export interface PlanWithId {
-    id: bigint;
+export interface PlanData {
+    status: string;
+    dateStr: string;
     name: string;
     plan: string;
-    dateEntry: string;
-    mobileNumber: string;
     installment: string;
-    daysCount: bigint;
-    billRefundStatus: string;
-}
-export interface User {
-    userName: string;
-    createdAt: bigint;
     mobile: string;
 }
-export interface CustomField {
-    fieldName: string;
-    fieldValue: string;
+export interface UserInfo {
+    userName: string;
+    mobile: string;
 }
-export interface Customer {
-    tag: string;
-    name: string;
-    mobileNumber: string;
-    isHighlighted: boolean;
-    customFields: Array<CustomField>;
-    ghRga: string;
-    address: string;
-}
-export interface UserPlanData {
-    userMobile: string;
-    plans: Array<PlanWithId>;
-}
-export interface UserCustomerData {
-    userMobile: string;
-    customers: Array<CustomerWithId>;
+export interface PlanOption {
+    id: string;
+    optionLabel: string;
+    color: string;
 }
 export interface backendInterface {
-    addCustomer(userMobile: string, customer: Customer): Promise<bigint>;
-    addPlan(userMobile: string, planData: Plan): Promise<PlanWithId>;
-    createUser(adminMobile: string, newMobile: string, userName: string): Promise<{
-        ok: boolean;
-        message: string;
-    }>;
-    deleteCustomer(userMobile: string, id: bigint): Promise<boolean>;
-    deletePlan(userMobile: string, id: bigint): Promise<boolean>;
-    deleteUser(adminMobile: string, mobile: string): Promise<{
-        ok: boolean;
-        message: string;
-    }>;
+    addCustomer(mobile: string, data: CustomerData): Promise<string>;
+    addPlan(mobile: string, plan: PlanData): Promise<string>;
+    createUser(mobile: string, userName: string): Promise<boolean>;
+    deleteAllPlans(mobile: string): Promise<boolean>;
+    deleteCustomer(mobile: string, id: string): Promise<boolean>;
+    deletePlan(mobile: string, id: string): Promise<boolean>;
+    deleteUser(mobile: string): Promise<boolean>;
     generateOtp(mobile: string): Promise<string>;
-    getAllCustomers(userMobile: string): Promise<Array<CustomerWithId>>;
-    getAllCustomersForAdmin(): Promise<Array<UserCustomerData>>;
-    getAllPlans(userMobile: string): Promise<Array<PlanWithId>>;
-    getAllPlansForAdmin(): Promise<Array<UserPlanData>>;
-    getAllUsers(): Promise<Array<string>>;
+    getAllCustomers(mobile: string): Promise<Array<CustomerWithId>>;
+    getAllCustomersForAdmin(): Promise<Array<[string, Array<CustomerWithId>]>>;
+    getAllPlans(mobile: string): Promise<Array<PlanWithId>>;
+    getAllPlansForAdmin(): Promise<Array<[string, Array<PlanWithId>]>>;
     getColorTheme(): Promise<string>;
-    getCustomer(userMobile: string, id: bigint): Promise<CustomerWithId | null>;
-    getCustomerCount(userMobile: string): Promise<bigint>;
-    getFieldDefinitions(): Promise<Array<FieldDefinition>>;
-    getPlan(userMobile: string, id: bigint): Promise<PlanWithId | null>;
-    getPlanOptions(): Promise<Array<string>>;
-    getRegisteredUsers(adminMobile: string): Promise<Array<User>>;
-    getSettings(): Promise<Array<string>>;
+    getCustomer(mobile: string, id: string): Promise<CustomerWithId | null>;
+    getCustomerCount(mobile: string): Promise<bigint>;
+    getFieldDefinitions(): Promise<Array<FieldDef>>;
+    getPlan(mobile: string, id: string): Promise<PlanWithId | null>;
+    getPlanOptions(): Promise<Array<PlanOption>>;
+    getRegisteredUsers(): Promise<Array<UserInfo>>;
+    getSettings(): Promise<Settings>;
     getTagOptions(): Promise<Array<TagOption>>;
-    getUserName(mobile: string): Promise<string>;
-    updateColorTheme(theme: string): Promise<void>;
-    updateCustomer(userMobile: string, id: bigint, customer: Customer): Promise<boolean>;
-    updateFieldDefinitions(fields: Array<FieldDefinition>): Promise<void>;
-    updatePlan(userMobile: string, id: bigint, planData: Plan): Promise<boolean>;
-    updatePlanOptions(newOptions: Array<string>): Promise<void>;
-    updatePlanStatus(userMobile: string, id: bigint, status: string): Promise<boolean>;
-    updateSettings(newSettings: Array<string>): Promise<void>;
-    updateTagOptions(newOptions: Array<TagOption>): Promise<void>;
+    getUserName(mobile: string): Promise<string | null>;
+    updateColorTheme(theme: string): Promise<boolean>;
+    updateCustomer(mobile: string, id: string, data: CustomerData): Promise<boolean>;
+    updateFieldDefinitions(fields: Array<FieldDef>): Promise<boolean>;
+    updatePlan(mobile: string, id: string, plan: PlanData): Promise<boolean>;
+    updatePlanOptions(options: Array<PlanOption>): Promise<boolean>;
+    updatePlanStatus(mobile: string, id: string, status: string): Promise<boolean>;
+    updateSettings(s: Settings): Promise<boolean>;
+    updateTagOptions(options: Array<TagOption>): Promise<boolean>;
     verifyOtp(mobile: string, otp: string): Promise<boolean>;
 }

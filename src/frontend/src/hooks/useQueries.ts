@@ -1,95 +1,171 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  CustomerWithId as BackendCustomerWithId,
   PlanWithId as BackendPlanWithId,
-  CustomField,
-  Customer,
-  FieldDefinition,
-  Plan,
+  CustomerData,
+  DropdownOption,
+  FieldDef,
+  PlanData,
+  PlanOption,
+  Settings,
   TagOption,
-  User,
+  UserInfo,
 } from "../backend";
-import { useActor } from "./useActor";
+import { useActor, waitForActor } from "./useActor";
 
-export type { Customer, CustomField, FieldDefinition, Plan, TagOption, User };
+// Re-export backend types for use in pages
+export type {
+  DropdownOption,
+  FieldDef,
+  PlanOption,
+  Settings,
+  TagOption,
+  UserInfo,
+};
 
-export interface PlanEntry {
-  dateEntry: string;
-  name: string;
-  mobileNumber: string;
-  installment: string;
-  plan: string;
-}
+// ─── Frontend types ───────────────────────────────────────────────────────────
 
-export interface PlanWithId {
-  id: number;
-  dateEntry: string;
-  name: string;
-  mobileNumber: string;
-  installment: string;
-  plan: string;
-  daysCount: number;
-  billRefundStatus: string;
-}
+// FieldDefinition mirrors FieldDef for backwards-compat usage in pages
+export type FieldDefinition = FieldDef;
 
-function mapPlan(p: BackendPlanWithId): PlanWithId {
-  return {
-    id: Number(p.id),
-    dateEntry: p.dateEntry,
-    name: p.name,
-    mobileNumber: p.mobileNumber,
-    installment: p.installment,
-    plan: p.plan,
-    daysCount: Number(p.daysCount),
-    billRefundStatus: p.billRefundStatus ?? "",
-  };
-}
-
-export interface CustomerWithId {
-  id: number;
+export interface CustomerRow {
+  id: string;
+  fields: [string, string][];
+  // Convenience accessors populated by mapCustomer:
   name: string;
   mobileNumber: string;
   tag: string;
   ghRga: string;
   address: string;
   isHighlighted: boolean;
-  customFields: CustomField[];
+  customFields: { fieldName: string; fieldValue: string }[];
+}
+
+export interface PlanRow {
+  id: string;
+  dateStr: string;
+  name: string;
+  mobile: string;
+  installment: string;
+  plan: string;
+  daysCount: number;
+  status: string;
+  // Aliases so existing pages that read .dateEntry / .mobileNumber / .billRefundStatus still work
+  dateEntry: string;
+  mobileNumber: string;
+  billRefundStatus: string;
 }
 
 export interface AdminUserData {
   userMobile: string;
-  customers: CustomerWithId[];
+  customers: CustomerRow[];
 }
 
-// ─── Customer Queries ────────────────────────────────────────────────────────
+// Legacy aliases so existing import sites compile
+export type CustomerWithId = CustomerRow;
+export type PlanWithId = PlanRow;
+
+// ─── Mappers ──────────────────────────────────────────────────────────────────
+
+/** Looks up a value from the fields array by field ID (first element of tuple). */
+function getField(fields: [string, string][], id: string): string {
+  const found = fields.find(([k]) => k === id);
+  return found ? found[1] : "";
+}
+
+function mapCustomer(c: BackendCustomerWithId): CustomerRow {
+  const fields = c.fields as [string, string][];
+  const name = getField(fields, "name");
+  const mobileNumber =
+    getField(fields, "mobileNo") || getField(fields, "mobileNumber");
+  const tag = getField(fields, "tag");
+  const ghRga = getField(fields, "ghRga");
+  const address = getField(fields, "address");
+  const isHighlighted = getField(fields, "isHighlighted") === "true";
+
+  // Custom fields = everything except known core fields
+  const coreIds = new Set([
+    "name",
+    "mobileNo",
+    "mobileNumber",
+    "tag",
+    "ghRga",
+    "address",
+    "isHighlighted",
+  ]);
+  const customFields = fields
+    .filter(([k]) => !coreIds.has(k))
+    .map(([fieldName, fieldValue]) => ({ fieldName, fieldValue }));
+
+  return {
+    id: c.id,
+    fields,
+    name,
+    mobileNumber,
+    tag,
+    ghRga,
+    address,
+    isHighlighted,
+    customFields,
+  };
+}
+
+function mapPlan(p: BackendPlanWithId): PlanRow {
+  return {
+    id: p.id,
+    dateStr: p.dateStr,
+    name: p.name,
+    mobile: p.mobile,
+    installment: p.installment,
+    plan: p.plan,
+    daysCount: Number(p.daysCount),
+    status: p.status,
+    // Aliases
+    dateEntry: p.dateStr,
+    mobileNumber: p.mobile,
+    billRefundStatus: p.status,
+  };
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+// Helper: build CustomerData from CustomerRow fields
+function buildCustomerData(fields: [string, string][]): CustomerData {
+  return { fields };
+}
+
+// ─── Customer Queries ─────────────────────────────────────────────────────────
 
 export function useGetAllCustomers(userMobile: string) {
   const { actor, isFetching } = useActor();
-  return useQuery<CustomerWithId[]>({
+  return useQuery<CustomerRow[]>({
     queryKey: ["customers", userMobile],
     queryFn: async () => {
       if (!actor || !userMobile) return [];
-      const customers = await actor.getAllCustomers(userMobile);
-      return customers.map((c) => ({
-        ...c,
-        id: Number(c.id),
-        isHighlighted: c.isHighlighted ?? false,
-        customFields: c.customFields ?? [],
-      }));
+      const result = await actor.getAllCustomers(userMobile);
+      return result.map(mapCustomer);
     },
     enabled: !!actor && !isFetching && !!userMobile,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 8000),
   });
 }
 
 export function useGetSettings() {
   const { actor, isFetching } = useActor();
-  return useQuery<string[]>({
+  return useQuery<Settings>({
     queryKey: ["settings"],
     queryFn: async () => {
-      if (!actor) return ["GH", "RGA", "CLOSE", "NOT INTERESTED"];
-      const settings = await actor.getSettings();
-      return settings.length > 0
-        ? settings
-        : ["GH", "RGA", "CLOSE", "NOT INTERESTED"];
+      if (!actor) return { ghRgaOptions: [] };
+      return actor.getSettings();
     },
     enabled: !!actor && !isFetching,
   });
@@ -100,18 +176,9 @@ export function useGetTagOptions() {
   return useQuery<TagOption[]>({
     queryKey: ["tagOptions"],
     queryFn: async () => {
-      if (!actor)
-        return [
-          { tagLabel: "Purple", tagColor: "purple" },
-          { tagLabel: "Regular", tagColor: "default" },
-        ];
+      if (!actor) return [];
       const opts = await actor.getTagOptions();
-      return opts.length > 0
-        ? opts
-        : [
-            { tagLabel: "Purple", tagColor: "purple" },
-            { tagLabel: "Regular", tagColor: "default" },
-          ];
+      return opts;
     },
     enabled: !!actor && !isFetching,
   });
@@ -119,7 +186,7 @@ export function useGetTagOptions() {
 
 export function useGetFieldDefinitions() {
   const { actor, isFetching } = useActor();
-  return useQuery<FieldDefinition[]>({
+  return useQuery<FieldDef[]>({
     queryKey: ["fieldDefinitions"],
     queryFn: async () => {
       if (!actor) return [];
@@ -143,13 +210,13 @@ export function useGetColorTheme() {
 
 // ─── Admin Queries ────────────────────────────────────────────────────────────
 
-export function useGetAllUsers() {
+export function useGetRegisteredUsers() {
   const { actor, isFetching } = useActor();
-  return useQuery<string[]>({
-    queryKey: ["allUsers"],
+  return useQuery<UserInfo[]>({
+    queryKey: ["registeredUsers"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllUsers();
+      return actor.getRegisteredUsers();
     },
     enabled: !!actor && !isFetching,
   });
@@ -162,33 +229,12 @@ export function useGetAllCustomersForAdmin() {
     queryFn: async (): Promise<AdminUserData[]> => {
       if (!actor) return [];
       const result = await actor.getAllCustomersForAdmin();
-      return result.map((r) => ({
-        userMobile: r.userMobile,
-        customers: r.customers.map((c) => ({
-          id: Number(c.id),
-          name: c.name,
-          mobileNumber: c.mobileNumber,
-          tag: c.tag,
-          ghRga: c.ghRga,
-          address: c.address,
-          isHighlighted: c.isHighlighted ?? false,
-          customFields: c.customFields ?? [],
-        })),
+      return result.map(([userMobile, customers]) => ({
+        userMobile,
+        customers: customers.map(mapCustomer),
       }));
     },
     enabled: !!actor && !isFetching,
-  });
-}
-
-export function useGetRegisteredUsers(adminMobile: string) {
-  const { actor, isFetching } = useActor();
-  return useQuery<User[]>({
-    queryKey: ["registeredUsers", adminMobile],
-    queryFn: async () => {
-      if (!actor || !adminMobile) return [];
-      return actor.getRegisteredUsers(adminMobile);
-    },
-    enabled: !!actor && !isFetching && !!adminMobile,
   });
 }
 
@@ -198,7 +244,8 @@ export function useGetUserName(mobile: string) {
     queryKey: ["userName", mobile],
     queryFn: async () => {
       if (!actor || !mobile) return "";
-      return actor.getUserName(mobile);
+      const result = await actor.getUserName(mobile);
+      return result ?? "";
     },
     enabled: !!actor && !isFetching && !!mobile,
   });
@@ -210,18 +257,22 @@ export function useAddCustomer(userMobile: string) {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (customer: Customer) => {
-      if (!actor)
-        throw new Error("Actor not ready — please wait and try again");
+    mutationFn: async (fields: [string, string][]) => {
       if (!userMobile)
         throw new Error("User session missing — please log in again");
-      return actor.addCustomer(userMobile, customer);
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      console.log("[useAddCustomer] Saving customer for", userMobile);
+      return resolvedActor.addCustomer(userMobile, buildCustomerData(fields));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers", userMobile] });
     },
     onError: (error: unknown) => {
-      console.error("[useAddCustomer] Save failed:", error);
+      console.error(
+        "[useAddCustomer] Save failed:",
+        extractErrorMessage(error),
+        error,
+      );
     },
   });
 }
@@ -232,19 +283,29 @@ export function useUpdateCustomer(userMobile: string) {
   return useMutation({
     mutationFn: async ({
       id,
-      customer,
-    }: { id: number; customer: Customer }) => {
-      if (!actor)
-        throw new Error("Actor not ready — please wait and try again");
+      fields,
+    }: {
+      id: string;
+      fields: [string, string][];
+    }) => {
       if (!userMobile)
         throw new Error("User session missing — please log in again");
-      return actor.updateCustomer(userMobile, BigInt(id), customer);
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updateCustomer(
+        userMobile,
+        id,
+        buildCustomerData(fields),
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers", userMobile] });
     },
     onError: (error: unknown) => {
-      console.error("[useUpdateCustomer] Update failed:", error);
+      console.error(
+        "[useUpdateCustomer] Update failed:",
+        extractErrorMessage(error),
+        error,
+      );
     },
   });
 }
@@ -253,12 +314,19 @@ export function useDeleteCustomer(userMobile: string) {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.deleteCustomer(userMobile, BigInt(id));
+    mutationFn: async (id: string) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.deleteCustomer(userMobile, id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers", userMobile] });
+    },
+    onError: (error: unknown) => {
+      console.error(
+        "[useDeleteCustomer] Delete failed:",
+        extractErrorMessage(error),
+        error,
+      );
     },
   });
 }
@@ -267,12 +335,15 @@ export function useUpdateSettings() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (newSettings: string[]) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateSettings(newSettings);
+    mutationFn: async (newSettings: Settings) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updateSettings(newSettings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (error: unknown) => {
+      console.error("[useUpdateSettings] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -282,11 +353,17 @@ export function useUpdateTagOptions() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (newOptions: TagOption[]) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateTagOptions(newOptions);
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updateTagOptions(newOptions);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tagOptions"] });
+    },
+    onError: (error: unknown) => {
+      console.error(
+        "[useUpdateTagOptions] Failed:",
+        extractErrorMessage(error),
+      );
     },
   });
 }
@@ -295,12 +372,18 @@ export function useUpdateFieldDefinitions() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (fields: FieldDefinition[]) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateFieldDefinitions(fields);
+    mutationFn: async (fields: FieldDef[]) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updateFieldDefinitions(fields);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fieldDefinitions"] });
+    },
+    onError: (error: unknown) => {
+      console.error(
+        "[useUpdateFieldDefinitions] Failed:",
+        extractErrorMessage(error),
+      );
     },
   });
 }
@@ -310,11 +393,17 @@ export function useUpdateColorTheme() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (theme: string) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updateColorTheme(theme);
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updateColorTheme(theme);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["colorTheme"] });
+    },
+    onError: (error: unknown) => {
+      console.error(
+        "[useUpdateColorTheme] Failed:",
+        extractErrorMessage(error),
+      );
     },
   });
 }
@@ -325,8 +414,11 @@ export function useGenerateOtp() {
   const { actor } = useActor();
   return useMutation({
     mutationFn: async (mobile: string) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.generateOtp(mobile);
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.generateOtp(mobile);
+    },
+    onError: (error: unknown) => {
+      console.error("[useGenerateOtp] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -335,8 +427,11 @@ export function useVerifyOtp() {
   const { actor } = useActor();
   return useMutation({
     mutationFn: async ({ mobile, otp }: { mobile: string; otp: string }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.verifyOtp(mobile, otp);
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.verifyOtp(mobile, otp);
+    },
+    onError: (error: unknown) => {
+      console.error("[useVerifyOtp] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -348,18 +443,21 @@ export function useCreateUser() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      adminMobile,
-      newMobile,
+      mobile,
       userName,
-    }: { adminMobile: string; newMobile: string; userName: string }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.createUser(adminMobile, newMobile, userName);
+    }: {
+      mobile: string;
+      userName: string;
+    }) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.createUser(mobile, userName);
     },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({
-        queryKey: ["registeredUsers", vars.adminMobile],
-      });
-      queryClient.invalidateQueries({ queryKey: ["allUsers"] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["registeredUsers"] });
+      queryClient.invalidateQueries({ queryKey: ["allCustomersForAdmin"] });
+    },
+    onError: (error: unknown) => {
+      console.error("[useCreateUser] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -368,18 +466,16 @@ export function useDeleteUser() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      adminMobile,
-      mobile,
-    }: { adminMobile: string; mobile: string }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.deleteUser(adminMobile, mobile);
+    mutationFn: async (mobile: string) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.deleteUser(mobile);
     },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({
-        queryKey: ["registeredUsers", vars.adminMobile],
-      });
-      queryClient.invalidateQueries({ queryKey: ["allUsers"] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["registeredUsers"] });
+      queryClient.invalidateQueries({ queryKey: ["allCustomersForAdmin"] });
+    },
+    onError: (error: unknown) => {
+      console.error("[useDeleteUser] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -388,7 +484,7 @@ export function useDeleteUser() {
 
 export function useGetAllPlans(userMobile: string) {
   const { actor, isFetching } = useActor();
-  return useQuery<PlanWithId[]>({
+  return useQuery<PlanRow[]>({
     queryKey: ["plans", userMobile],
     queryFn: async () => {
       if (!actor || !userMobile) return [];
@@ -396,17 +492,18 @@ export function useGetAllPlans(userMobile: string) {
       return plans.map(mapPlan);
     },
     enabled: !!actor && !isFetching && !!userMobile,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 8000),
   });
 }
 
 export function useGetPlanOptions() {
   const { actor, isFetching } = useActor();
-  return useQuery<string[]>({
+  return useQuery<PlanOption[]>({
     queryKey: ["planOptions"],
     queryFn: async () => {
-      if (!actor) return ["GHS", "RGA"];
-      const opts = await actor.getPlanOptions();
-      return opts.length > 0 ? opts : ["GHS", "RGA"];
+      if (!actor) return [];
+      return actor.getPlanOptions();
     },
     enabled: !!actor && !isFetching,
   });
@@ -416,13 +513,17 @@ export function useAddPlan(userMobile: string) {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (planData: Plan) => {
-      if (!actor) throw new Error("Not connected");
-      const result = await actor.addPlan(userMobile, planData);
-      return mapPlan(result);
+    mutationFn: async (planData: PlanData) => {
+      if (!userMobile)
+        throw new Error("User session missing — please log in again");
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.addPlan(userMobile, planData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["plans", userMobile] });
+    },
+    onError: (error: unknown) => {
+      console.error("[useAddPlan] Failed:", extractErrorMessage(error), error);
     },
   });
 }
@@ -431,12 +532,18 @@ export function useUpdatePlan(userMobile: string) {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, planData }: { id: number; planData: Plan }) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updatePlan(userMobile, BigInt(id), planData);
+    mutationFn: async ({
+      id,
+      planData,
+    }: { id: string; planData: PlanData }) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updatePlan(userMobile, id, planData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["plans", userMobile] });
+    },
+    onError: (error: unknown) => {
+      console.error("[useUpdatePlan] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -445,12 +552,15 @@ export function useDeletePlan(userMobile: string) {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: number) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.deletePlan(userMobile, BigInt(id));
+    mutationFn: async (id: string) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.deletePlan(userMobile, id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["plans", userMobile] });
+    },
+    onError: (error: unknown) => {
+      console.error("[useDeletePlan] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -459,14 +569,15 @@ export function useDeleteAllPlans(userMobile: string) {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (planIds: number[]) => {
-      if (!actor) throw new Error("Not connected");
-      for (const id of planIds) {
-        await actor.deletePlan(userMobile, BigInt(id));
-      }
+    mutationFn: async () => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.deleteAllPlans(userMobile);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["plans", userMobile] });
+    },
+    onError: (error: unknown) => {
+      console.error("[useDeleteAllPlans] Failed:", extractErrorMessage(error));
     },
   });
 }
@@ -475,28 +586,38 @@ export function useUpdatePlanOptions() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (options: string[]) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.updatePlanOptions(options);
+    mutationFn: async (options: PlanOption[]) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updatePlanOptions(options);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["planOptions"] });
     },
+    onError: (error: unknown) => {
+      console.error(
+        "[useUpdatePlanOptions] Failed:",
+        extractErrorMessage(error),
+      );
+    },
   });
 }
 
-export function useUpdatePlanStatus() {
+export function useUpdatePlanStatus(userMobile: string) {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      if (!actor) throw new Error("Not connected");
-      const userMobile = localStorage.getItem("userMobile") ?? "";
-      return actor.updatePlanStatus(userMobile, BigInt(id), status);
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const resolvedActor = await waitForActor(() => actor, 12000);
+      return resolvedActor.updatePlanStatus(userMobile, id, status);
     },
     onSuccess: () => {
-      const userMobile = localStorage.getItem("userMobile") ?? "";
       queryClient.invalidateQueries({ queryKey: ["plans", userMobile] });
+    },
+    onError: (error: unknown) => {
+      console.error(
+        "[useUpdatePlanStatus] Failed:",
+        extractErrorMessage(error),
+      );
     },
   });
 }

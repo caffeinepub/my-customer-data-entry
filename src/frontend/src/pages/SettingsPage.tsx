@@ -32,7 +32,11 @@ import {
   useUpdatePlanOptions,
   useUpdateSettings,
 } from "../hooks/useQueries";
-import type { FieldDefinition } from "../hooks/useQueries";
+import type {
+  DropdownOption,
+  FieldDefinition,
+  PlanOption,
+} from "../hooks/useQueries";
 
 // ─── Colour Theme ─────────────────────────────────────────────────────────────
 
@@ -54,7 +58,6 @@ const DARK_COLOURS = [
   { name: "dark-purple", hex: "#581C87", label: "Dark Purple" },
 ];
 
-// Map theme name to OKLCH primary values for CSS variable update
 const THEME_OKLCH: Record<string, string> = {
   orange: "0.72 0.18 55",
   yellow: "0.80 0.18 90",
@@ -70,7 +73,6 @@ const THEME_OKLCH: Record<string, string> = {
   "dark-purple": "0.32 0.18 295",
 };
 
-// Sidebar gradient stops per theme
 const THEME_SIDEBAR_GRADIENT: Record<string, [string, string]> = {
   orange: ["0.52 0.18 50", "0.62 0.20 70"],
   yellow: ["0.60 0.18 80", "0.75 0.20 95"],
@@ -95,8 +97,6 @@ export function applyThemeToDocument(themeName: string) {
     "--sidebar",
     `oklch(${(THEME_SIDEBAR_GRADIENT[themeName] ?? THEME_SIDEBAR_GRADIENT.orange)[0]})`,
   );
-
-  // Store for Sidebar component to read gradient
   root.style.setProperty(
     "--theme-sidebar-from",
     `oklch(${(THEME_SIDEBAR_GRADIENT[themeName] ?? THEME_SIDEBAR_GRADIENT.orange)[0]})`,
@@ -110,20 +110,40 @@ export function applyThemeToDocument(themeName: string) {
 // ─── Field Management ─────────────────────────────────────────────────────────
 
 const DEFAULT_FIELD_DEFS: FieldDefinition[] = [
-  { id: "name", fieldLabel: "Name", fieldType: "text", order: BigInt(1) },
+  {
+    id: "name",
+    fieldLabel: "Name",
+    fieldType: "text",
+    order: BigInt(1),
+    required: true,
+  },
   {
     id: "mobileNo",
     fieldLabel: "Mobile Number",
     fieldType: "text",
     order: BigInt(2),
+    required: true,
   },
-  { id: "tag", fieldLabel: "Tag", fieldType: "text", order: BigInt(3) },
-  { id: "ghRga", fieldLabel: "GH/RGA", fieldType: "select", order: BigInt(4) },
+  {
+    id: "tag",
+    fieldLabel: "Tag",
+    fieldType: "text",
+    order: BigInt(3),
+    required: false,
+  },
+  {
+    id: "ghRga",
+    fieldLabel: "GH/RGA",
+    fieldType: "select",
+    order: BigInt(4),
+    required: false,
+  },
   {
     id: "address",
     fieldLabel: "Address",
     fieldType: "textarea",
     order: BigInt(5),
+    required: false,
   },
 ];
 
@@ -217,6 +237,7 @@ export function SettingsPage() {
       fieldLabel: newFieldLabel.trim(),
       fieldType: "text",
       order: BigInt(maxOrder + 1),
+      required: false,
     };
     setNewFieldLabel("");
     await saveFieldDefs([...fieldDefs, newField]);
@@ -224,24 +245,27 @@ export function SettingsPage() {
 
   // ── GH/RGA options ──
   const {
-    data: options,
+    data: settingsData,
     isLoading: isLoadingSettings,
     isError: isErrorSettings,
   } = useGetSettings();
   const updateSettings = useUpdateSettings();
 
-  const [localOptions, setLocalOptions] = useState<string[] | null>(null);
+  const [localOptions, setLocalOptions] = useState<DropdownOption[] | null>(
+    null,
+  );
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [newOption, setNewOption] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const displayOptions = localOptions ?? options ?? [];
+  const backendOptions: DropdownOption[] = settingsData?.ghRgaOptions ?? [];
+  const displayOptions: DropdownOption[] = localOptions ?? backendOptions;
 
-  const saveOptions = async (newList: string[]) => {
+  const saveOptions = async (newList: DropdownOption[]) => {
     setIsSaving(true);
     try {
-      await updateSettings.mutateAsync(newList);
+      await updateSettings.mutateAsync({ ghRgaOptions: newList });
       setLocalOptions(null);
       toast.success("Settings saved!");
     } catch {
@@ -253,7 +277,7 @@ export function SettingsPage() {
 
   const handleStartEdit = (index: number) => {
     setEditingIndex(index);
-    setEditingValue(displayOptions[index]);
+    setEditingValue(displayOptions[index].optionLabel);
   };
 
   const handleSaveEdit = async () => {
@@ -263,7 +287,7 @@ export function SettingsPage() {
       return;
     }
     const updated = displayOptions.map((opt, i) =>
-      i === editingIndex ? editingValue.trim() : opt,
+      i === editingIndex ? { ...opt, optionLabel: editingValue.trim() } : opt,
     );
     setEditingIndex(null);
     await saveOptions(updated);
@@ -280,24 +304,28 @@ export function SettingsPage() {
       toast.error("Please enter an option value");
       return;
     }
-    if (displayOptions.includes(newOption.trim())) {
+    if (displayOptions.some((o) => o.optionLabel === newOption.trim())) {
       toast.error("This option already exists");
       return;
     }
-    const updated = [...displayOptions, newOption.trim()];
+    const newOpt: DropdownOption = {
+      id: `ghrga_${Date.now()}`,
+      optionLabel: newOption.trim(),
+      color: "default",
+    };
     setNewOption("");
-    await saveOptions(updated);
+    await saveOptions([...displayOptions, newOpt]);
   };
 
   // ── Plan options ──
   const {
-    data: planOpts,
+    data: planOptsData,
     isLoading: isLoadingPlanOpts,
     isError: isErrorPlanOpts,
   } = useGetPlanOptions();
   const updatePlanOptions = useUpdatePlanOptions();
 
-  const [localPlanOptions, setLocalPlanOptions] = useState<string[] | null>(
+  const [localPlanOptions, setLocalPlanOptions] = useState<PlanOption[] | null>(
     null,
   );
   const [editingPlanIndex, setEditingPlanIndex] = useState<number | null>(null);
@@ -305,9 +333,10 @@ export function SettingsPage() {
   const [newPlanOption, setNewPlanOption] = useState("");
   const [isSavingPlan, setIsSavingPlan] = useState(false);
 
-  const displayPlanOptions = localPlanOptions ?? planOpts ?? [];
+  const backendPlanOpts: PlanOption[] = planOptsData ?? [];
+  const displayPlanOptions: PlanOption[] = localPlanOptions ?? backendPlanOpts;
 
-  const savePlanOptions = async (newList: string[]) => {
+  const savePlanOptions = async (newList: PlanOption[]) => {
     setIsSavingPlan(true);
     try {
       await updatePlanOptions.mutateAsync(newList);
@@ -322,7 +351,7 @@ export function SettingsPage() {
 
   const handleStartPlanEdit = (index: number) => {
     setEditingPlanIndex(index);
-    setEditingPlanValue(displayPlanOptions[index]);
+    setEditingPlanValue(displayPlanOptions[index].optionLabel);
   };
 
   const handleSavePlanEdit = async () => {
@@ -332,7 +361,9 @@ export function SettingsPage() {
       return;
     }
     const updated = displayPlanOptions.map((opt, i) =>
-      i === editingPlanIndex ? editingPlanValue.trim() : opt,
+      i === editingPlanIndex
+        ? { ...opt, optionLabel: editingPlanValue.trim() }
+        : opt,
     );
     setEditingPlanIndex(null);
     await savePlanOptions(updated);
@@ -349,13 +380,19 @@ export function SettingsPage() {
       toast.error("Please enter an option value");
       return;
     }
-    if (displayPlanOptions.includes(newPlanOption.trim())) {
+    if (
+      displayPlanOptions.some((o) => o.optionLabel === newPlanOption.trim())
+    ) {
       toast.error("This option already exists");
       return;
     }
-    const updated = [...displayPlanOptions, newPlanOption.trim()];
+    const newOpt: PlanOption = {
+      id: `plan_${Date.now()}`,
+      optionLabel: newPlanOption.trim(),
+      color: "default",
+    };
     setNewPlanOption("");
-    await savePlanOptions(updated);
+    await savePlanOptions([...displayPlanOptions, newOpt]);
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -657,7 +694,7 @@ export function SettingsPage() {
               <ul className="space-y-2">
                 {displayOptions.map((opt, idx) => (
                   <li
-                    key={opt}
+                    key={opt.id}
                     data-ocid={`settings.item.${idx + 1}`}
                     className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2"
                   >
@@ -701,7 +738,7 @@ export function SettingsPage() {
                     ) : (
                       <>
                         <span className="flex-1 text-sm font-medium text-foreground">
-                          {opt}
+                          {opt.optionLabel}
                         </span>
                         <Button
                           data-ocid={`settings.edit_button.${idx + 1}`}
@@ -709,7 +746,7 @@ export function SettingsPage() {
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground hover:text-primary"
                           onClick={() => handleStartEdit(idx)}
-                          title={`Edit "${opt}"`}
+                          title={`Edit "${opt.optionLabel}"`}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -720,7 +757,7 @@ export function SettingsPage() {
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => handleDelete(idx)}
                           disabled={isSaving}
-                          title={`Delete "${opt}"`}
+                          title={`Delete "${opt.optionLabel}"`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -762,6 +799,7 @@ export function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
         {/* ── PLAN OPTIONS CARD ── */}
         <Card className="shadow-card border-border">
           <CardHeader className="pb-3">
@@ -800,7 +838,7 @@ export function SettingsPage() {
               <ul className="space-y-2">
                 {displayPlanOptions.map((opt, idx) => (
                   <li
-                    key={opt}
+                    key={opt.id}
                     data-ocid={`settings.plan_option.${idx + 1}`}
                     className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2"
                   >
@@ -844,7 +882,7 @@ export function SettingsPage() {
                     ) : (
                       <>
                         <span className="flex-1 text-sm font-medium text-foreground">
-                          {opt}
+                          {opt.optionLabel}
                         </span>
                         <Button
                           data-ocid={`settings.plan_option.edit_button.${idx + 1}`}
@@ -852,7 +890,7 @@ export function SettingsPage() {
                           variant="ghost"
                           className="h-8 w-8 text-muted-foreground hover:text-primary"
                           onClick={() => handleStartPlanEdit(idx)}
-                          title={`Edit "${opt}"`}
+                          title={`Edit "${opt.optionLabel}"`}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -863,7 +901,7 @@ export function SettingsPage() {
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => handleDeletePlanOption(idx)}
                           disabled={isSavingPlan}
-                          title={`Delete "${opt}"`}
+                          title={`Delete "${opt.optionLabel}"`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

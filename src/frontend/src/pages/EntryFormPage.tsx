@@ -19,14 +19,13 @@ import { PageShell } from "../components/PageShell";
 import { useActor } from "../hooks/useActor";
 import {
   useAddCustomer,
-  useAddPlan,
   useGetAllPlans,
   useGetFieldDefinitions,
   useGetPlanOptions,
   useGetSettings,
   useUpdateCustomer,
 } from "../hooks/useQueries";
-import type { FieldDefinition, PlanWithId } from "../hooks/useQueries";
+import type { FieldDefinition, PlanRow } from "../hooks/useQueries";
 
 interface EntryFormPageProps {
   editData: EditCustomerData | null;
@@ -37,20 +36,40 @@ interface EntryFormPageProps {
 const CORE_FIELD_IDS = ["name", "mobileNo", "tag", "ghRga", "address"];
 
 const DEFAULT_FIELDS: FieldDefinition[] = [
-  { id: "name", fieldLabel: "Name", fieldType: "text", order: BigInt(1) },
+  {
+    id: "name",
+    fieldLabel: "Name",
+    fieldType: "text",
+    order: BigInt(1),
+    required: true,
+  },
   {
     id: "mobileNo",
     fieldLabel: "Mobile Number",
     fieldType: "text",
     order: BigInt(2),
+    required: true,
   },
-  { id: "tag", fieldLabel: "Tag", fieldType: "text", order: BigInt(3) },
-  { id: "ghRga", fieldLabel: "GH/RGA", fieldType: "select", order: BigInt(4) },
+  {
+    id: "tag",
+    fieldLabel: "Tag",
+    fieldType: "text",
+    order: BigInt(3),
+    required: false,
+  },
+  {
+    id: "ghRga",
+    fieldLabel: "GH/RGA",
+    fieldType: "select",
+    order: BigInt(4),
+    required: false,
+  },
   {
     id: "address",
     fieldLabel: "Address",
     fieldType: "textarea",
     order: BigInt(5),
+    required: false,
   },
 ];
 
@@ -77,10 +96,7 @@ function DaysDisplay({ dateEntry }: { dateEntry: string }) {
   );
 }
 
-function PlanRow({
-  plan,
-  onDelete,
-}: { plan: PlanWithId; onDelete: (id: number) => void }) {
+function PlanPreviewRow({ plan }: { plan: PlanRow }) {
   const days = calcDays(plan.dateEntry);
   const isOld = days >= 300;
   return (
@@ -98,17 +114,6 @@ function PlanRow({
         className={`px-3 py-2 text-sm font-semibold whitespace-nowrap ${isOld ? "text-destructive" : "text-foreground"}`}
       >
         {days}d
-      </td>
-      <td className="px-3 py-2">
-        <button
-          type="button"
-          data-ocid="plans.delete.button"
-          aria-label="Delete plan"
-          onClick={() => onDelete(plan.id)}
-          className="text-muted-foreground hover:text-destructive transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
       </td>
     </tr>
   );
@@ -135,7 +140,7 @@ export function EntryFormPage({
   );
   const formRef = useRef<HTMLDivElement>(null);
 
-  // Plans form state
+  // Plans form state (display only — no save; managed via PLANS page)
   const [planForm, setPlanForm] = useState({
     dateEntry: "",
     name: "",
@@ -143,20 +148,15 @@ export function EntryFormPage({
     installment: "",
     plan: "",
   });
-  const [planErrors, setPlanErrors] = useState<{
-    mobileNumber?: string;
-    dateEntry?: string;
-  }>({});
-  const planFormRef = useRef<HTMLDivElement>(null);
 
-  const { data: settingsOptions } = useGetSettings();
+  const { data: settingsData } = useGetSettings();
   const { data: rawFieldDefs } = useGetFieldDefinitions();
   const { data: planOptions } = useGetPlanOptions();
   const { data: savedPlans = [] } = useGetAllPlans(currentUser);
 
   const ghRgaOptions =
-    settingsOptions && settingsOptions.length > 0
-      ? settingsOptions
+    settingsData?.ghRgaOptions && settingsData.ghRgaOptions.length > 0
+      ? settingsData.ghRgaOptions.map((o) => o.optionLabel)
       : ["GH", "RGA", "CLOSE", "NOT INTERESTED"];
 
   const fieldDefs: FieldDefinition[] =
@@ -165,11 +165,17 @@ export function EntryFormPage({
       : DEFAULT_FIELDS;
 
   const planDropdownOptions =
-    planOptions && planOptions.length > 0 ? planOptions : ["GHS", "RGA"];
+    planOptions && planOptions.length > 0
+      ? planOptions.map((o) => o.optionLabel)
+      : ["GHS", "RGA"];
+
+  // Last 3 plans preview (most recent first)
+  const recentPlans = [...savedPlans]
+    .sort((a, b) => (a.id < b.id ? 1 : -1))
+    .slice(0, 3);
 
   const addCustomer = useAddCustomer(currentUser);
   const updateCustomer = useUpdateCustomer(currentUser);
-  const addPlan = useAddPlan(currentUser);
 
   const isEditing = editData !== null;
   const isPending = addCustomer.isPending || updateCustomer.isPending;
@@ -216,6 +222,22 @@ export function EntryFormPage({
     return newErrors;
   };
 
+  const buildFields = (): [string, string][] => {
+    const extraFields = fieldDefs.filter((f) => !CORE_FIELD_IDS.includes(f.id));
+    const fields: [string, string][] = [
+      ["name", coreValues.name.trim()],
+      ["mobileNo", coreValues.mobileNo.trim()],
+      ["tag", coreValues.tag],
+      ["ghRga", coreValues.ghRga],
+      ["address", coreValues.address.trim()],
+      ["isHighlighted", editData?.isHighlighted ? "true" : "false"],
+      ...extraFields
+        .filter((f) => (customValues[f.id] ?? "") !== "")
+        .map((f) => [f.id, customValues[f.id]] as [string, string]),
+    ];
+    return fields;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors = validate();
@@ -225,31 +247,15 @@ export function EntryFormPage({
     }
     setErrors({});
 
-    const extraFields = fieldDefs.filter((f) => !CORE_FIELD_IDS.includes(f.id));
-    const customFields = extraFields
-      .map((f) => ({ fieldName: f.id, fieldValue: customValues[f.id] ?? "" }))
-      .filter((cf) => cf.fieldValue !== "");
-
-    const customerData = {
-      name: coreValues.name.trim(),
-      mobileNumber: coreValues.mobileNo.trim(),
-      tag: coreValues.tag,
-      ghRga: coreValues.ghRga,
-      address: coreValues.address.trim(),
-      isHighlighted: false,
-      customFields,
-    };
+    const fields = buildFields();
 
     try {
       if (isEditing && editData) {
-        await updateCustomer.mutateAsync({
-          id: editData.id,
-          customer: customerData,
-        });
+        await updateCustomer.mutateAsync({ id: editData.id, fields });
         toast.success("Customer updated successfully!");
         onEditComplete();
       } else {
-        await addCustomer.mutateAsync(customerData);
+        await addCustomer.mutateAsync(fields);
         toast.success("Customer saved successfully!");
       }
       setCoreValues({
@@ -284,47 +290,6 @@ export function EntryFormPage({
     setErrors({});
     if (isEditing) onEditComplete();
     formRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const validatePlanForm = () => {
-    const errs: { mobileNumber?: string; dateEntry?: string } = {};
-    if (!planForm.dateEntry) errs.dateEntry = "Date is required";
-    if (!planForm.mobileNumber.trim()) {
-      errs.mobileNumber = "Mobile number is required";
-    } else if (!/^\d{10}$/.test(planForm.mobileNumber.trim())) {
-      errs.mobileNumber = "Mobile number must be exactly 10 digits";
-    }
-    return errs;
-  };
-
-  const handlePlanSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validatePlanForm();
-    if (Object.keys(errs).length > 0) {
-      setPlanErrors(errs);
-      return;
-    }
-    setPlanErrors({});
-    try {
-      await addPlan.mutateAsync({
-        dateEntry: planForm.dateEntry,
-        name: planForm.name.trim(),
-        mobileNumber: planForm.mobileNumber.trim(),
-        installment: planForm.installment.trim(),
-        plan: planForm.plan,
-        billRefundStatus: "",
-      });
-      toast.success("Plan saved successfully!");
-      setPlanForm({
-        dateEntry: "",
-        name: "",
-        mobileNumber: "",
-        installment: "",
-        plan: "",
-      });
-    } catch {
-      toast.error("Failed to save plan");
-    }
   };
 
   const renderField = (field: FieldDefinition) => {
@@ -544,210 +509,181 @@ export function EntryFormPage({
         </Card>
       </div>
 
-      {/* ── PLANS Data Entry Form ── */}
-      <div ref={planFormRef} className="mt-8">
+      {/* ── PLANS Data Entry (reference view only — save via PLANS page) ── */}
+      <div className="mt-8">
         <Card className="shadow-card border-border">
           <CardHeader className="pb-4 border-b border-border">
             <CardTitle className="flex items-center gap-2 text-base font-semibold">
               <CalendarDays className="h-5 w-5 text-primary" />
               PLANS Data Entry
             </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Reference view — add and manage plans from the{" "}
+              <strong>PLANS</strong> page.
+            </p>
           </CardHeader>
           <CardContent className="p-6 md:p-7">
-            <form onSubmit={handlePlanSubmit} noValidate>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Date */}
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="plan-date"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Date <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="plan-date"
-                    data-ocid="plans.date.input"
-                    type="date"
-                    value={planForm.dateEntry}
-                    onChange={(e) =>
-                      setPlanForm((p) => ({ ...p, dateEntry: e.target.value }))
-                    }
-                    className="h-11"
-                    aria-invalid={!!planErrors.dateEntry}
-                  />
-                  {planErrors.dateEntry && (
-                    <p className="text-xs text-destructive">
-                      {planErrors.dateEntry}
-                    </p>
-                  )}
-                </div>
-
-                {/* Name */}
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="plan-name"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Name
-                  </Label>
-                  <Input
-                    id="plan-name"
-                    data-ocid="plans.name.input"
-                    placeholder="Enter name"
-                    value={planForm.name}
-                    onChange={(e) =>
-                      setPlanForm((p) => ({ ...p, name: e.target.value }))
-                    }
-                    className="h-11"
-                  />
-                </div>
-
-                {/* Mobile Number */}
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="plan-mobile"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Mobile Number <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="plan-mobile"
-                    data-ocid="plans.mobile.input"
-                    type="tel"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={10}
-                    placeholder="Enter 10-digit mobile number"
-                    value={planForm.mobileNumber}
-                    onChange={(e) =>
-                      setPlanForm((p) => ({
-                        ...p,
-                        mobileNumber: e.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, 10),
-                      }))
-                    }
-                    className="h-11"
-                    aria-invalid={!!planErrors.mobileNumber}
-                  />
-                  {planErrors.mobileNumber && (
-                    <p className="text-xs text-destructive">
-                      {planErrors.mobileNumber}
-                    </p>
-                  )}
-                  {!planErrors.mobileNumber &&
-                    planForm.mobileNumber.length > 0 &&
-                    planForm.mobileNumber.length < 10 && (
-                      <p className="text-xs text-muted-foreground">
-                        {planForm.mobileNumber.length}/10 digits
-                      </p>
-                    )}
-                </div>
-
-                {/* Installment */}
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="plan-installment"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Installment
-                  </Label>
-                  <Input
-                    id="plan-installment"
-                    data-ocid="plans.installment.input"
-                    placeholder="Enter installment"
-                    value={planForm.installment}
-                    onChange={(e) =>
-                      setPlanForm((p) => ({
-                        ...p,
-                        installment: e.target.value,
-                      }))
-                    }
-                    className="h-11"
-                  />
-                </div>
-
-                {/* Plan Dropdown */}
-                <div className="space-y-1.5">
-                  <Label
-                    htmlFor="plan-type"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Plan
-                  </Label>
-                  <Select
-                    value={planForm.plan}
-                    onValueChange={(val) =>
-                      setPlanForm((p) => ({ ...p, plan: val }))
-                    }
-                  >
-                    <SelectTrigger
-                      id="plan-type"
-                      data-ocid="plans.plan.select"
-                      className="h-11"
-                    >
-                      <SelectValue placeholder="Select a plan" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {planDropdownOptions.map((opt) => (
-                        <SelectItem key={opt} value={opt}>
-                          {opt}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Days (auto-calculated, read-only) */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-foreground">
-                    Days
-                  </Label>
-                  <div
-                    data-ocid="plans.days.display"
-                    className="h-11 flex items-center px-3 rounded-md border border-input bg-muted/40 text-sm"
-                  >
-                    {planForm.dateEntry ? (
-                      <DaysDisplay dateEntry={planForm.dateEntry} />
-                    ) : (
-                      <span className="text-muted-foreground">
-                        Auto-calculated from date
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-5 border-t border-border">
-                <Button
-                  type="submit"
-                  data-ocid="plans.submit_button"
-                  disabled={addPlan.isPending}
-                  className="h-10 px-6"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Date */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="plan-date"
+                  className="text-sm font-medium text-foreground"
                 >
-                  {addPlan.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Save Plan"
-                  )}
-                </Button>
+                  Date
+                </Label>
+                <Input
+                  id="plan-date"
+                  data-ocid="plans.date.input"
+                  type="date"
+                  value={planForm.dateEntry}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({ ...p, dateEntry: e.target.value }))
+                  }
+                  className="h-11"
+                />
               </div>
-            </form>
+
+              {/* Name */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="plan-name"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Name
+                </Label>
+                <Input
+                  id="plan-name"
+                  data-ocid="plans.name.input"
+                  placeholder="Enter name"
+                  value={planForm.name}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                  className="h-11"
+                />
+              </div>
+
+              {/* Mobile Number */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="plan-mobile"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Mobile Number
+                </Label>
+                <Input
+                  id="plan-mobile"
+                  data-ocid="plans.mobile.input"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={10}
+                  placeholder="Enter 10-digit mobile number"
+                  value={planForm.mobileNumber}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({
+                      ...p,
+                      mobileNumber: e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 10),
+                    }))
+                  }
+                  className="h-11"
+                />
+                {planForm.mobileNumber.length > 0 &&
+                  planForm.mobileNumber.length < 10 && (
+                    <p className="text-xs text-muted-foreground">
+                      {planForm.mobileNumber.length}/10 digits
+                    </p>
+                  )}
+              </div>
+
+              {/* Installment */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="plan-installment"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Installment
+                </Label>
+                <Input
+                  id="plan-installment"
+                  data-ocid="plans.installment.input"
+                  placeholder="Enter installment"
+                  value={planForm.installment}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({
+                      ...p,
+                      installment: e.target.value,
+                    }))
+                  }
+                  className="h-11"
+                />
+              </div>
+
+              {/* Plan Dropdown */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="plan-type"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Plan
+                </Label>
+                <Select
+                  value={planForm.plan}
+                  onValueChange={(val) =>
+                    setPlanForm((p) => ({ ...p, plan: val }))
+                  }
+                >
+                  <SelectTrigger
+                    id="plan-type"
+                    data-ocid="plans.plan.select"
+                    className="h-11"
+                  >
+                    <SelectValue placeholder="Select a plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {planDropdownOptions.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Days (auto-calculated, read-only) */}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-foreground">
+                  Days
+                </Label>
+                <div
+                  data-ocid="plans.days.display"
+                  className="h-11 flex items-center px-3 rounded-md border border-input bg-muted/40 text-sm"
+                >
+                  {planForm.dateEntry ? (
+                    <DaysDisplay dateEntry={planForm.dateEntry} />
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Auto-calculated from date
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Saved Plans Preview below the form */}
-        {savedPlans.length > 0 && (
-          <div className="mt-6" data-ocid="plans.saved_list">
+        {/* Recent Plans Preview (last 3) */}
+        {recentPlans.length > 0 && (
+          <div className="mt-6" data-ocid="plans.recent_list">
             <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-primary" />
-              Saved Plans ({savedPlans.length})
+              Recent Plans (last {recentPlans.length})
             </h3>
             <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[600px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/40">
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -768,12 +704,11 @@ export function EntryFormPage({
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                       Days
                     </th>
-                    <th className="px-3 py-2.5 w-10" />
                   </tr>
                 </thead>
                 <tbody>
-                  {savedPlans.map((plan) => (
-                    <PlanRow key={plan.id} plan={plan} onDelete={() => {}} />
+                  {recentPlans.map((plan) => (
+                    <PlanPreviewRow key={plan.id} plan={plan} />
                   ))}
                 </tbody>
               </table>

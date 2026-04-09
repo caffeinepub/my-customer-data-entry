@@ -39,6 +39,7 @@ import "jspdf-autotable";
 import {
   Edit,
   FileDown,
+  FileSpreadsheet,
   Filter,
   Loader2,
   MapPin,
@@ -61,6 +62,7 @@ import {
   useAddCustomer,
   useDeleteCustomer,
   useGetAllCustomers,
+  useGetFieldDefinitions,
   useGetSettings,
   useGetTagOptions,
   useUpdateCustomer,
@@ -76,11 +78,13 @@ declare module "jspdf" {
 
 interface CustomerListPageProps {
   onEditCustomer: (data: EditCustomerData) => void;
-  currentUser?: string;
+  onOpenPlanSearch?: (mobile: string) => void;
   userMobile?: string;
+  currentUser?: string;
 }
 
-// Helper: highlight matching query segments with orange styling
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function highlightText(text: string, query: string): ReactNode {
   if (!query.trim() || !text) return text;
   const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -151,22 +155,31 @@ function GhRgaBadge({
   );
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function CustomerListPage({
   onEditCustomer,
-  currentUser,
+  onOpenPlanSearch,
   userMobile,
+  currentUser,
 }: CustomerListPageProps) {
-  const resolvedUser = currentUser ?? userMobile ?? "";
+  const resolvedUser = userMobile ?? currentUser ?? "";
+
   const {
     data: customers,
     isLoading,
     isError,
   } = useGetAllCustomers(resolvedUser);
   const { data: tagOpts } = useGetTagOptions();
-  const { data: ghRgaOpts } = useGetSettings();
+  const { data: settingsData } = useGetSettings();
+  const { data: fieldDefs } = useGetFieldDefinitions();
   const deleteCustomer = useDeleteCustomer(resolvedUser);
   const addCustomer = useAddCustomer(resolvedUser);
   const updateCustomer = useUpdateCustomer(resolvedUser);
+
+  const ghRgaOptions = settingsData?.ghRgaOptions?.map(
+    (o) => o.optionLabel,
+  ) ?? ["GH", "RGA", "CLOSE", "NOT INTERESTED"];
 
   const [searchQuery, setSearchQuery] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
@@ -180,24 +193,40 @@ export function CustomerListPage({
   const [isImporting, setIsImporting] = useState(false);
   const [showClearAll, setShowClearAll] = useState(false);
   const [isClearingAll, setIsClearingAll] = useState(false);
-
-  // Checkbox selection state
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteSelected, setShowDeleteSelected] = useState(false);
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Derive custom field columns from field definitions (beyond the 5 core fields)
+  const coreFieldIds = [
+    "name",
+    "mobileNo",
+    "mobileNumber",
+    "tag",
+    "ghRga",
+    "address",
+  ];
+  const customFieldDefs = (fieldDefs ?? []).filter(
+    (f) => !coreFieldIds.includes(f.id),
+  );
+
+  // ─── Filtering ──────────────────────────────────────────────────────────────
+
   const filteredCustomers = (customers ?? []).filter((c) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchesSearch =
+      const coreMatch =
         c.name.toLowerCase().includes(q) ||
         c.mobileNumber.toLowerCase().includes(q) ||
         c.tag.toLowerCase().includes(q) ||
         c.ghRga.toLowerCase().includes(q) ||
         c.address.toLowerCase().includes(q);
-      if (!matchesSearch) return false;
+      const customMatch = (c.customFields ?? []).some((cf) =>
+        cf.fieldValue.toLowerCase().includes(q),
+      );
+      if (!coreMatch && !customMatch) return false;
     }
     if (tagFilter !== "all" && c.tag !== tagFilter) return false;
     if (ghRgaFilter !== "all" && c.ghRga !== ghRgaFilter) return false;
@@ -211,7 +240,8 @@ export function CustomerListPage({
     setGhRgaFilter("all");
   };
 
-  // Checkbox helpers
+  // ─── Selection helpers ───────────────────────────────────────────────────────
+
   const allChecked =
     filteredCustomers.length > 0 &&
     filteredCustomers.every((c) => selectedIds.has(c.id));
@@ -233,7 +263,7 @@ export function CustomerListPage({
     }
   };
 
-  const toggleSelectOne = (id: number) => {
+  const toggleSelectOne = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -243,37 +273,80 @@ export function CustomerListPage({
   };
 
   const getTagColor = (tagLabel: string): string => {
-    const found = (tagOpts ?? []).find((t) => t.tagLabel === tagLabel);
-    return found?.tagColor ?? "default";
+    const found = (tagOpts ?? []).find((t) => t.optionLabel === tagLabel);
+    return found?.color ?? "default";
   };
+
+  const getCustomFieldValue = (
+    customer: CustomerWithId,
+    fieldId: string,
+  ): string => {
+    const found = (customer.customFields ?? []).find(
+      (cf) => cf.fieldName === fieldId,
+    );
+    return found?.fieldValue ?? "";
+  };
+
+  // Build fields array for customer mutations
+  const buildCustomerFields = (
+    c: CustomerWithId,
+    overrides: Partial<{ isHighlighted: boolean }> = {},
+  ): [string, string][] => {
+    const highlighted =
+      overrides.isHighlighted !== undefined
+        ? overrides.isHighlighted
+        : c.isHighlighted;
+    const base: [string, string][] = [
+      ["name", c.name],
+      ["mobileNo", c.mobileNumber],
+      ["tag", c.tag],
+      ["ghRga", c.ghRga],
+      ["address", c.address],
+      ["isHighlighted", highlighted ? "true" : "false"],
+    ];
+    for (const cf of c.customFields ?? []) {
+      base.push([cf.fieldName, cf.fieldValue]);
+    }
+    return base;
+  };
+
+  // ─── Export / Import ────────────────────────────────────────────────────────
 
   const exportPDF = () => {
     const list = customers ?? [];
     const doc = new jsPDF();
     doc.text("Customer List", 14, 16);
-    doc.autoTable({
-      head: [["Name", "Mobile", "Tag", "GH/RGA", "Address"]],
-      body: list.map((c) => [
-        c.name,
-        c.mobileNumber,
-        c.tag,
-        c.ghRga,
-        c.address,
-      ]),
-      startY: 22,
-    });
+    const extraHeaders = customFieldDefs.map((f) => f.fieldLabel);
+    const head = [
+      ["Name", "Mobile", "Tag", "GH/RGA", "Address", ...extraHeaders],
+    ];
+    const body = list.map((c) => [
+      c.name,
+      c.mobileNumber,
+      c.tag,
+      c.ghRga,
+      c.address,
+      ...customFieldDefs.map((f) => getCustomFieldValue(c, f.id)),
+    ]);
+    doc.autoTable({ head, body, startY: 22 });
     doc.save("customers.pdf");
   };
 
   const exportXLS = () => {
     const list = customers ?? [];
-    const rows = list.map((c) => ({
-      Name: c.name,
-      "Mobile Number": c.mobileNumber,
-      Tag: c.tag,
-      "GH/RGA": c.ghRga,
-      Address: c.address,
-    }));
+    const rows = list.map((c) => {
+      const base: Record<string, string> = {
+        Name: c.name,
+        "Mobile Number": c.mobileNumber,
+        Tag: c.tag,
+        "GH/RGA": c.ghRga,
+        Address: c.address,
+      };
+      for (const f of customFieldDefs) {
+        base[f.fieldLabel] = getCustomFieldValue(c, f.id);
+      }
+      return base;
+    });
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Customers");
@@ -296,15 +369,22 @@ export function CustomerListPage({
           );
           return found ? String(row[found] ?? "") : "";
         };
-        await addCustomer.mutateAsync({
-          name: get("name"),
-          mobileNumber: get("mobile number") || get("mobile"),
-          tag: get("tag"),
-          ghRga: get("gh/rga") || get("ghrga"),
-          address: get("address"),
-          isHighlighted: false,
-          customFields: [],
-        });
+        const customFieldValues = customFieldDefs.map((f) => ({
+          fieldName: f.id,
+          fieldValue: get(f.fieldLabel),
+        }));
+        const fields: [string, string][] = [
+          ["name", get("name")],
+          ["mobileNo", get("mobile number") || get("mobile")],
+          ["tag", get("tag")],
+          ["ghRga", get("gh/rga") || get("ghrga")],
+          ["address", get("address")],
+          ["isHighlighted", "false"],
+          ...customFieldValues
+            .filter((cf) => cf.fieldValue !== "")
+            .map((cf) => [cf.fieldName, cf.fieldValue] as [string, string]),
+        ];
+        await addCustomer.mutateAsync(fields);
       }
       toast.success(`Imported ${rows.length} customer(s) successfully`);
     } catch {
@@ -314,6 +394,8 @@ export function CustomerListPage({
       e.target.value = "";
     }
   };
+
+  // ─── Mutations ──────────────────────────────────────────────────────────────
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
@@ -377,18 +459,10 @@ export function CustomerListPage({
     if (!selectedCustomer) return;
     setIsSavingHighlight(true);
     try {
-      await updateCustomer.mutateAsync({
-        id: selectedCustomer.id,
-        customer: {
-          name: selectedCustomer.name,
-          mobileNumber: selectedCustomer.mobileNumber,
-          tag: selectedCustomer.tag,
-          ghRga: selectedCustomer.ghRga,
-          address: selectedCustomer.address,
-          isHighlighted: popupHighlighted,
-          customFields: selectedCustomer.customFields ?? [],
-        },
+      const fields = buildCustomerFields(selectedCustomer, {
+        isHighlighted: popupHighlighted,
       });
+      await updateCustomer.mutateAsync({ id: selectedCustomer.id, fields });
       toast.success("Customer updated successfully");
       setSelectedCustomer(null);
     } catch {
@@ -398,9 +472,18 @@ export function CustomerListPage({
     }
   };
 
+  const handleOpenPlanSearch = (mobile: string) => {
+    setSelectedCustomer(null);
+    if (onOpenPlanSearch) {
+      onOpenPlanSearch(mobile);
+    }
+  };
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <PageShell breadcrumb="CustomerHub | Customer List" title="Customer List">
-      {/* Import/Export + Delete Selected Toolbar */}
+      {/* Toolbar */}
       <div className="flex flex-wrap gap-2 mb-4">
         <Button
           data-ocid="customers.export_pdf_button"
@@ -419,7 +502,7 @@ export function CustomerListPage({
           className="gap-1.5"
           onClick={exportXLS}
         >
-          <FileDown className="h-4 w-4" />
+          <FileSpreadsheet className="h-4 w-4" />
           Export XLS
         </Button>
         <Button
@@ -492,7 +575,7 @@ export function CustomerListPage({
         )}
       </div>
 
-      {/* TAG and GH/RGA Filters */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Filter className="h-4 w-4" />
@@ -509,9 +592,9 @@ export function CustomerListPage({
           <SelectContent>
             <SelectItem value="all">All Tags</SelectItem>
             {(tagOpts ?? []).map((opt) => (
-              <SelectItem key={opt.tagLabel} value={opt.tagLabel}>
+              <SelectItem key={opt.optionLabel} value={opt.optionLabel}>
                 <div className="flex items-center gap-1.5">
-                  <TagBadge tagLabel={opt.tagLabel} tagColor={opt.tagColor} />
+                  <TagBadge tagLabel={opt.optionLabel} tagColor={opt.color} />
                 </div>
               </SelectItem>
             ))}
@@ -527,13 +610,11 @@ export function CustomerListPage({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All GH/RGA</SelectItem>
-            {(ghRgaOpts ?? ["GH", "RGA", "CLOSE", "NOT INTERESTED"]).map(
-              (opt) => (
-                <SelectItem key={opt} value={opt}>
-                  <GhRgaBadge value={opt} />
-                </SelectItem>
-              ),
-            )}
+            {ghRgaOptions.map((opt) => (
+              <SelectItem key={opt} value={opt}>
+                <GhRgaBadge value={opt} />
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -550,7 +631,7 @@ export function CustomerListPage({
         )}
       </div>
 
-      {/* Customer count stat */}
+      {/* Stat bar */}
       {!isLoading && !isError && customers && customers.length > 0 && (
         <div className="flex items-center gap-2 mb-3 px-1">
           <div className="flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2">
@@ -571,6 +652,7 @@ export function CustomerListPage({
         </div>
       )}
 
+      {/* Loading */}
       {isLoading && (
         <div data-ocid="customers.loading_state" className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
@@ -579,6 +661,7 @@ export function CustomerListPage({
         </div>
       )}
 
+      {/* Error */}
       {isError && (
         <div
           data-ocid="customers.error_state"
@@ -588,6 +671,7 @@ export function CustomerListPage({
         </div>
       )}
 
+      {/* Empty */}
       {!isLoading && !isError && customers && customers.length === 0 && (
         <div
           data-ocid="customers.empty_state"
@@ -606,6 +690,7 @@ export function CustomerListPage({
         </div>
       )}
 
+      {/* No results */}
       {!isLoading &&
         !isError &&
         customers &&
@@ -628,14 +713,14 @@ export function CustomerListPage({
           </div>
         )}
 
+      {/* Table */}
       {!isLoading && filteredCustomers.length > 0 && (
-        <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="overflow-x-auto overflow-y-auto max-h-[60vh]">
             <Table className="min-w-[640px]">
               <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  {/* Select All checkbox */}
-                  <TableHead className="w-10 pl-3">
+                <TableRow className="bg-muted/40 hover:bg-muted/40 sticky top-0 z-10">
+                  <TableHead className="w-10 pl-3 bg-muted/40">
                     <Checkbox
                       data-ocid="customers.select_all_checkbox"
                       checked={allChecked}
@@ -651,21 +736,29 @@ export function CustomerListPage({
                       }}
                     />
                   </TableHead>
-                  <TableHead className="font-semibold text-foreground w-[180px]">
+                  <TableHead className="font-semibold text-foreground w-[180px] bg-muted/40">
                     Name
                   </TableHead>
-                  <TableHead className="font-semibold text-foreground w-[140px]">
+                  <TableHead className="font-semibold text-foreground w-[140px] bg-muted/40">
                     Mobile
                   </TableHead>
-                  <TableHead className="font-semibold text-foreground w-[120px]">
+                  <TableHead className="font-semibold text-foreground w-[120px] bg-muted/40">
                     Tag
                   </TableHead>
-                  <TableHead className="font-semibold text-foreground w-[120px]">
+                  <TableHead className="font-semibold text-foreground w-[120px] bg-muted/40">
                     GH/RGA
                   </TableHead>
-                  <TableHead className="font-semibold text-foreground">
+                  <TableHead className="font-semibold text-foreground bg-muted/40">
                     Address
                   </TableHead>
+                  {customFieldDefs.map((f) => (
+                    <TableHead
+                      key={f.id}
+                      className="font-semibold text-foreground bg-muted/40 whitespace-nowrap"
+                    >
+                      {f.fieldLabel}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -679,7 +772,6 @@ export function CustomerListPage({
                         : "hover:bg-accent/40"
                     }`}
                   >
-                    {/* Per-row checkbox */}
                     <TableCell
                       className="pl-3 w-10"
                       onClick={(e) => e.stopPropagation()}
@@ -740,6 +832,18 @@ export function CustomerListPage({
                         ? highlightText(customer.address, searchQuery)
                         : "—"}
                     </TableCell>
+                    {customFieldDefs.map((f) => {
+                      const val = getCustomFieldValue(customer, f.id);
+                      return (
+                        <TableCell
+                          key={f.id}
+                          className="text-muted-foreground text-sm cursor-pointer whitespace-nowrap"
+                          onClick={() => openCustomerDetail(customer)}
+                        >
+                          {val ? highlightText(val, searchQuery) : "—"}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))}
               </TableBody>
@@ -748,7 +852,7 @@ export function CustomerListPage({
         </div>
       )}
 
-      {/* Customer Detail Dialog */}
+      {/* ─── Customer Detail Dialog ─────────────────────────────────────────── */}
       <Dialog
         open={!!selectedCustomer}
         onOpenChange={(open) => !open && setSelectedCustomer(null)}
@@ -763,6 +867,7 @@ export function CustomerListPage({
           {selectedCustomer && (
             <div className="space-y-4 py-2">
               <div className="rounded-lg bg-muted/40 p-4 space-y-3">
+                {/* Name */}
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">
                     Name
@@ -771,22 +876,41 @@ export function CustomerListPage({
                     {highlightText(selectedCustomer.name, searchQuery)}
                   </p>
                 </div>
+
+                {/* Mobile with PLAN button */}
                 <div className="flex items-start gap-2">
                   <Phone className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">
                       Mobile Number
                     </p>
-                    <p className="text-sm text-foreground">
-                      {selectedCustomer.mobileNumber
-                        ? highlightText(
-                            selectedCustomer.mobileNumber,
-                            searchQuery,
-                          )
-                        : "—"}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm text-foreground">
+                        {selectedCustomer.mobileNumber
+                          ? highlightText(
+                              selectedCustomer.mobileNumber,
+                              searchQuery,
+                            )
+                          : "—"}
+                      </p>
+                      {selectedCustomer.mobileNumber && onOpenPlanSearch && (
+                        <Button
+                          data-ocid="customers.dialog.plan_button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs gap-1 border-primary/40 text-primary hover:bg-primary/10"
+                          onClick={() =>
+                            handleOpenPlanSearch(selectedCustomer.mobileNumber)
+                          }
+                        >
+                          PLAN
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Tag */}
                 <div className="flex items-start gap-2">
                   <Tag className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                   <div>
@@ -804,6 +928,8 @@ export function CustomerListPage({
                     )}
                   </div>
                 </div>
+
+                {/* GH/RGA */}
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">
                     GH/RGA
@@ -817,6 +943,8 @@ export function CustomerListPage({
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
                 </div>
+
+                {/* Address */}
                 {selectedCustomer.address && (
                   <div className="flex items-start gap-2">
                     <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -830,9 +958,24 @@ export function CustomerListPage({
                     </div>
                   </div>
                 )}
+
+                {/* Custom Fields */}
+                {(selectedCustomer.customFields ?? []).map(
+                  (cf) =>
+                    cf.fieldValue && (
+                      <div key={cf.fieldName}>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">
+                          {cf.fieldName}
+                        </p>
+                        <p className="text-sm text-foreground">
+                          {highlightText(cf.fieldValue, searchQuery)}
+                        </p>
+                      </div>
+                    ),
+                )}
               </div>
 
-              {/* Highlighted checkbox */}
+              {/* Highlight checkbox */}
               <div className="flex items-center gap-2 px-1 pt-1">
                 <Checkbox
                   data-ocid="customers.dialog.highlighted_checkbox"
@@ -905,7 +1048,7 @@ export function CustomerListPage({
         </DialogContent>
       </Dialog>
 
-      {/* Delete Single Customer Confirmation */}
+      {/* ─── Delete Single Confirmation ──────────────────────────────────────── */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -944,7 +1087,7 @@ export function CustomerListPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Selected Confirmation */}
+      {/* ─── Delete Selected Confirmation ────────────────────────────────────── */}
       <AlertDialog
         open={showDeleteSelected}
         onOpenChange={(open) => !open && setShowDeleteSelected(false)}
@@ -983,7 +1126,7 @@ export function CustomerListPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Clear All Data Confirmation */}
+      {/* ─── Clear All Confirmation ───────────────────────────────────────────── */}
       <AlertDialog
         open={showClearAll}
         onOpenChange={(open) => !open && setShowClearAll(false)}

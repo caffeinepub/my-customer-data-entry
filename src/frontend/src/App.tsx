@@ -22,7 +22,7 @@ import { SettingsPage, applyThemeToDocument } from "./pages/SettingsPage";
 export type Page = "entry" | "customers" | "settings" | "admin" | "plans";
 
 export interface EditCustomerData {
-  id: number;
+  id: string;
   name: string;
   mobileNumber: string;
   tag: string;
@@ -117,14 +117,22 @@ function AppShell({
     }
   }, [savedTheme]);
 
+  const [planSearchMobile, setPlanSearchMobile] = useState<string>("");
+
   const handleEditCustomer = (data: EditCustomerData) => {
     setEditData(data);
     setCurrentPage("entry");
   };
 
+  const handleOpenPlanSearch = (mobile: string) => {
+    setPlanSearchMobile(mobile);
+    setCurrentPage("plans");
+  };
+
   const handlePageChange = (page: Page) => {
     setCurrentPage(page);
     if (page !== "entry") setEditData(null);
+    if (page !== "plans") setPlanSearchMobile("");
   };
 
   return (
@@ -154,9 +162,15 @@ function AppShell({
             <CustomerListPage
               userMobile={userMobile}
               onEditCustomer={handleEditCustomer}
+              onOpenPlanSearch={handleOpenPlanSearch}
             />
           )}
-          {currentPage === "plans" && <PlansPage userMobile={userMobile} />}
+          {currentPage === "plans" && (
+            <PlansPage
+              userMobile={userMobile}
+              initialMobileSearch={planSearchMobile}
+            />
+          )}
           {currentPage === "settings" && <SettingsPage />}
           {currentPage === "admin" && isAdmin && (
             <AdminPage userMobile={userMobile} />

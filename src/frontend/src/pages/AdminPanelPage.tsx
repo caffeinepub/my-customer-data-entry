@@ -14,7 +14,7 @@ import { useState } from "react";
 import { PageShell } from "../components/PageShell";
 import {
   useGetAllCustomersForAdmin,
-  useGetAllUsers,
+  useGetRegisteredUsers,
 } from "../hooks/useQueries";
 import type { CustomerWithId } from "../hooks/useQueries";
 
@@ -29,10 +29,10 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const [viewingUser, setViewingUser] = useState<string | null>(null);
 
   const {
-    data: allUsers,
+    data: registeredUsers,
     isLoading: isLoadingUsers,
     isError: isErrorUsers,
-  } = useGetAllUsers();
+  } = useGetRegisteredUsers();
   const { data: adminData, isLoading: isLoadingAdmin } =
     useGetAllCustomersForAdmin();
 
@@ -58,10 +58,11 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
     );
   }
 
-  const users = allUsers ?? [];
-  const filteredUsers = users.filter((mobile) =>
+  const users = registeredUsers ?? [];
+  const filteredUsers = users.filter((u) =>
     searchQuery.trim()
-      ? mobile.toLowerCase().includes(searchQuery.toLowerCase())
+      ? u.mobile.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.userName.toLowerCase().includes(searchQuery.toLowerCase())
       : true,
   );
 
@@ -73,12 +74,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
   const getCustomersForUser = (mobile: string): CustomerWithId[] => {
     const entry = (adminData ?? []).find((d) => d.userMobile === mobile);
     if (!entry) return [];
-    return entry.customers.map((c) => ({
-      ...c,
-      id: Number(c.id),
-      isHighlighted: c.isHighlighted ?? false,
-      customFields: c.customFields ?? [],
-    }));
+    return entry.customers;
   };
 
   if (viewingUser) {
@@ -214,7 +210,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
         <Input
           data-ocid="admin.search_input"
           type="text"
-          placeholder="Search users by mobile number..."
+          placeholder="Search users by mobile or name..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="pl-9 pr-9"
@@ -277,7 +273,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
           <div>
             <h3 className="font-semibold text-foreground">No users yet</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Users will appear here once they log in.
+              Users will appear here once they are created in the Admin Panel.
             </p>
           </div>
         </div>
@@ -309,6 +305,9 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="font-semibold text-foreground">
+                  User Name
+                </TableHead>
+                <TableHead className="font-semibold text-foreground">
                   Mobile Number
                 </TableHead>
                 <TableHead className="font-semibold text-foreground text-right w-[140px]">
@@ -320,25 +319,28 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((mobile, idx) => {
-                const count = getCustomerCountForUser(mobile);
-                const isAdmin = mobile === ADMIN_MOBILE;
+              {filteredUsers.map((u, idx) => {
+                const count = getCustomerCountForUser(u.mobile);
+                const isAdminUser = u.mobile === ADMIN_MOBILE;
                 return (
                   <TableRow
-                    key={mobile}
+                    key={u.mobile}
                     data-ocid={`admin.user.${idx + 1}`}
                     className="hover:bg-accent/40"
                   >
                     <TableCell className="font-medium text-foreground">
                       <div className="flex items-center gap-2">
-                        <span>{mobile}</span>
-                        {isAdmin && (
+                        <span>{u.userName}</span>
+                        {isAdminUser && (
                           <span className="inline-flex items-center rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-xs font-semibold text-primary gap-1">
                             <Shield className="h-3 w-3" />
                             Admin
                           </span>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-sm">
+                      {u.mobile}
                     </TableCell>
                     <TableCell className="text-right">
                       <span className="inline-flex items-center justify-center rounded-full bg-muted px-3 py-1 text-sm font-semibold text-foreground min-w-[2rem]">
@@ -351,7 +353,7 @@ export function AdminPanelPage({ currentUser }: AdminPanelPageProps) {
                         variant="outline"
                         size="sm"
                         className="gap-1.5"
-                        onClick={() => setViewingUser(mobile)}
+                        onClick={() => setViewingUser(u.mobile)}
                       >
                         <Users className="h-3.5 w-3.5" />
                         View Customers

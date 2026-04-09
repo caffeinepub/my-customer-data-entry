@@ -1,21 +1,21 @@
 {
-  "overview": "A multi-user customer management app where each user logs in with their mobile number and a one-time password. Everyone sees only their own customers. The admin user (8128111699) can view all users and their complete customer lists from a dedicated admin panel. Built with full CRUD, search, filters, export, and color theme customization.",
+  "overview": "CustomerHub is a full-featured customer management app with multi-user OTP login, PLANS tracking, admin oversight, and fully configurable data entry fields.",
   "features": [
-    "OTP login with mobile number (code displayed in-app)",
-    "Per-user customer data isolation",
-    "Admin panel showing all users and their customer lists",
-    "Customer entry form with 10-digit mobile validation",
-    "Customer list with search, filters, export/import",
-    "Settings with color theme and field management",
-    "Session persists across page refreshes"
+    "Customer data entry with configurable fields",
+    "Customer list with search, filters, and multi-select delete",
+    "PLANS tracking with Bill Done/Refund status",
+    "Multi-user OTP login with admin panel",
+    "12 color themes",
+    "Import/export XLS",
+    "Live date/time display"
   ],
   "category": "productivity",
   "tags": [
     "customer-management",
+    "crm",
+    "plans",
     "multi-user",
-    "otp-login",
-    "admin-panel",
-    "crm"
+    "admin"
   ],
-  "last_updated": "2026-04-08T17:27:23.307Z"
+  "last_updated": "2026-04-09T08:47:32.192Z"
 }

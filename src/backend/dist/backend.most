@@ -1,22 +1,27 @@
-// Version: 1.0.0
-type CustomField__309861441 = {fieldName : Text; fieldValue : Text};
-type Customer__263943254 =
-  {
-    address : Text;
-    customFields : [CustomField__309861441];
-    ghRga : Text;
-    isHighlighted : Bool;
-    mobileNumber : Text;
-    name : Text;
-    tag : Text
-  };
+// Version: 3.0.0
+type CustomerData__961817730 = {fields : [(Text, Text)]};
 type Data__791452850<K, V> =
   {var count : Nat__490723111; kvs : [var ?(K, V)]};
-type FieldDefinition__664923838 =
-  {fieldLabel : Text; fieldType : Text; id : Text; order : Nat};
+type DropdownOption__179297245 =
+  {color : Text; id : Text; optionLabel : Text};
+type FieldDef__580065650 =
+  {
+    fieldLabel : Text;
+    fieldType : Text;
+    id : Text;
+    order : Nat;
+    required : Bool
+  };
 type Internal__8484328<K, V> =
   {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
 type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type List__415060402<T> = List__790383201<T>;
+type List__790383201<T> =
+  {
+    var blockIndex : Nat__490723111;
+    var blocks : [var [var ?T]];
+    var elementIndex : Nat__490723111
+  };
 type Map__158565046<K, V> = Map__297112838<K, V>;
 type Map__297112838<K, V> =
   {var root : Node__46230540<K, V>; var size : Nat__490723111};
@@ -25,7 +30,20 @@ type Nat__490723111 = Nat__920180692;
 type Nat__920180692 = Nat;
 type Node__46230540<K, V> =
   {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
-type Plan__193983685 =
+type OldCustomField__4455811 = {fieldName : Text; fieldValue : Text};
+type OldCustomer__268643839 =
+  {
+    address : Text;
+    customFields : [OldCustomField__4455811];
+    ghRga : Text;
+    isHighlighted : Bool;
+    mobileNumber : Text;
+    name : Text;
+    tag : Text
+  };
+type OldFieldDefinition__411798551 =
+  {fieldLabel : Text; fieldType : Text; id : Text; order : Nat};
+type OldPlan__87153505 =
   {
     billRefundStatus : Text;
     dateEntry : Text;
@@ -34,31 +52,60 @@ type Plan__193983685 =
     name : Text;
     plan : Text
   };
-type TagOption__450056646 = {tagColor : Text; tagLabel : Text};
+type OldTagOption__684290814 = {tagColor : Text; tagLabel : Text};
+type OldUser__655922588 = {createdAt : Int; mobile : Text; userName : Text};
+type PlanData__110306295 =
+  {
+    dateStr : Text;
+    installment : Text;
+    mobile : Text;
+    name : Text;
+    plan : Text;
+    status : Text
+  };
+type PlanOption__527559760 = {color : Text; id : Text; optionLabel : Text};
+type TagOption__450056646 = {color : Text; id : Text; optionLabel : Text};
 type User__831686142 = {createdAt : Int; mobile : Text; userName : Text};
-actor {
+actor ({
+  stable _ADMIN_MOBILE : Text;
+  in var colorTheme : Text;
+  in fieldDefinitions : List__415060402<OldFieldDefinition__411798551>;
+  in legacyCustomers : Map__605269027<Nat, OldCustomer__268643839>;
+  in legacyIdCounter : Nat;
+  in var legacyMigrated : Bool;
+  in var otpSeed : Nat;
+  in otpStore : Map__605269027<Text, Text>;
+  in planOptions : List__415060402<Text>;
+  in registeredUsers : Map__605269027<Text, OldUser__655922588>;
+  in settings : List__415060402<Text>;
+  in tagOptions : List__415060402<OldTagOption__684290814>;
+  in userCustomers :
+    Map__605269027<Text, Map__605269027<Nat, OldCustomer__268643839>>;
+  in userIdCounters : Map__605269027<Text, Nat>;
+  in userPlanCounters : Map__605269027<Text, Nat>;
+  in userPlans : Map__605269027<Text, Map__605269027<Nat, OldPlan__87153505>>
+}, {
   stable _ADMIN_MOBILE : Text;
   stable var colorTheme : Text;
-  stable fieldDefinitions :
+  stable fieldDefsList :
     {
       var blockIndex : Nat__490723111;
-      var blocks : [var [var ?FieldDefinition__664923838]];
+      var blocks : [var [var ?FieldDef__580065650]];
       var elementIndex : Nat__490723111
     };
-  stable legacyCustomers :
+  stable ghRgaOptions :
     {
-      var root : Node__46230540<Nat, Customer__263943254>;
-      var size : Nat__490723111
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?DropdownOption__179297245]];
+      var elementIndex : Nat__490723111
     };
-  stable legacyIdCounter : Nat;
-  stable var legacyMigrated : Bool;
   stable var otpSeed : Nat;
   stable otpStore :
     {var root : Node__46230540<Text, Text>; var size : Nat__490723111};
-  stable planOptions :
+  stable planOptionsList :
     {
       var blockIndex : Nat__490723111;
-      var blocks : [var [var ?Text]];
+      var blocks : [var [var ?PlanOption__527559760]];
       var elementIndex : Nat__490723111
     };
   stable registeredUsers :
@@ -66,13 +113,7 @@ actor {
       var root : Node__46230540<Text, User__831686142>;
       var size : Nat__490723111
     };
-  stable settings :
-    {
-      var blockIndex : Nat__490723111;
-      var blocks : [var [var ?Text]];
-      var elementIndex : Nat__490723111
-    };
-  stable tagOptions :
+  stable tagOptionsList :
     {
       var blockIndex : Nat__490723111;
       var blocks : [var [var ?TagOption__450056646]];
@@ -81,7 +122,7 @@ actor {
   stable userCustomers :
     {
       var root :
-        Node__46230540<Text, Map__605269027<Nat, Customer__263943254>>;
+        Node__46230540<Text, Map__605269027<Text, CustomerData__961817730>>;
       var size : Nat__490723111
     };
   stable userIdCounters :
@@ -90,7 +131,8 @@ actor {
     {var root : Node__46230540<Text, Nat>; var size : Nat__490723111};
   stable userPlans :
     {
-      var root : Node__46230540<Text, Map__605269027<Nat, Plan__193983685>>;
+      var root :
+        Node__46230540<Text, Map__605269027<Text, PlanData__110306295>>;
       var size : Nat__490723111
     }
-};
+}) ;

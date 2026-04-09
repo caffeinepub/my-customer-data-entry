@@ -90,112 +90,96 @@ export class ExternalBlob {
     }
 }
 export interface TagOption {
-    tagColor: string;
-    tagLabel: string;
+    id: string;
+    optionLabel: string;
+    color: string;
 }
-export interface Plan {
+export interface Settings {
+    ghRgaOptions: Array<DropdownOption>;
+}
+export interface CustomerWithId {
+    id: string;
+    fields: Array<[string, string]>;
+}
+export interface DropdownOption {
+    id: string;
+    optionLabel: string;
+    color: string;
+}
+export interface PlanWithId {
+    id: string;
+    status: string;
+    dateStr: string;
     name: string;
     plan: string;
-    dateEntry: string;
-    mobileNumber: string;
     installment: string;
-    billRefundStatus: string;
+    daysCount: bigint;
+    mobile: string;
 }
-export interface FieldDefinition {
+export interface CustomerData {
+    fields: Array<[string, string]>;
+}
+export interface FieldDef {
     id: string;
     order: bigint;
     fieldLabel: string;
+    required: boolean;
     fieldType: string;
 }
-export interface CustomerWithId {
-    id: bigint;
-    tag: string;
-    name: string;
-    mobileNumber: string;
-    isHighlighted: boolean;
-    customFields: Array<CustomField>;
-    ghRga: string;
-    address: string;
-}
-export interface PlanWithId {
-    id: bigint;
+export interface PlanData {
+    status: string;
+    dateStr: string;
     name: string;
     plan: string;
-    dateEntry: string;
-    mobileNumber: string;
     installment: string;
-    daysCount: bigint;
-    billRefundStatus: string;
-}
-export interface User {
-    userName: string;
-    createdAt: bigint;
     mobile: string;
 }
-export interface CustomField {
-    fieldName: string;
-    fieldValue: string;
+export interface UserInfo {
+    userName: string;
+    mobile: string;
 }
-export interface Customer {
-    tag: string;
-    name: string;
-    mobileNumber: string;
-    isHighlighted: boolean;
-    customFields: Array<CustomField>;
-    ghRga: string;
-    address: string;
-}
-export interface UserPlanData {
-    userMobile: string;
-    plans: Array<PlanWithId>;
-}
-export interface UserCustomerData {
-    userMobile: string;
-    customers: Array<CustomerWithId>;
+export interface PlanOption {
+    id: string;
+    optionLabel: string;
+    color: string;
 }
 export interface backendInterface {
-    addCustomer(userMobile: string, customer: Customer): Promise<bigint>;
-    addPlan(userMobile: string, planData: Plan): Promise<PlanWithId>;
-    createUser(adminMobile: string, newMobile: string, userName: string): Promise<{
-        ok: boolean;
-        message: string;
-    }>;
-    deleteCustomer(userMobile: string, id: bigint): Promise<boolean>;
-    deletePlan(userMobile: string, id: bigint): Promise<boolean>;
-    deleteUser(adminMobile: string, mobile: string): Promise<{
-        ok: boolean;
-        message: string;
-    }>;
+    addCustomer(mobile: string, data: CustomerData): Promise<string>;
+    addPlan(mobile: string, plan: PlanData): Promise<string>;
+    createUser(mobile: string, userName: string): Promise<boolean>;
+    deleteAllPlans(mobile: string): Promise<boolean>;
+    deleteCustomer(mobile: string, id: string): Promise<boolean>;
+    deletePlan(mobile: string, id: string): Promise<boolean>;
+    deleteUser(mobile: string): Promise<boolean>;
     generateOtp(mobile: string): Promise<string>;
-    getAllCustomers(userMobile: string): Promise<Array<CustomerWithId>>;
-    getAllCustomersForAdmin(): Promise<Array<UserCustomerData>>;
-    getAllPlans(userMobile: string): Promise<Array<PlanWithId>>;
-    getAllPlansForAdmin(): Promise<Array<UserPlanData>>;
-    getAllUsers(): Promise<Array<string>>;
+    getAllCustomers(mobile: string): Promise<Array<CustomerWithId>>;
+    getAllCustomersForAdmin(): Promise<Array<[string, Array<CustomerWithId>]>>;
+    getAllPlans(mobile: string): Promise<Array<PlanWithId>>;
+    getAllPlansForAdmin(): Promise<Array<[string, Array<PlanWithId>]>>;
     getColorTheme(): Promise<string>;
-    getCustomer(userMobile: string, id: bigint): Promise<CustomerWithId | null>;
-    getCustomerCount(userMobile: string): Promise<bigint>;
-    getFieldDefinitions(): Promise<Array<FieldDefinition>>;
-    getPlan(userMobile: string, id: bigint): Promise<PlanWithId | null>;
-    getPlanOptions(): Promise<Array<string>>;
-    getRegisteredUsers(adminMobile: string): Promise<Array<User>>;
-    getSettings(): Promise<Array<string>>;
+    getCustomer(mobile: string, id: string): Promise<CustomerWithId | null>;
+    getCustomerCount(mobile: string): Promise<bigint>;
+    getFieldDefinitions(): Promise<Array<FieldDef>>;
+    getPlan(mobile: string, id: string): Promise<PlanWithId | null>;
+    getPlanOptions(): Promise<Array<PlanOption>>;
+    getRegisteredUsers(): Promise<Array<UserInfo>>;
+    getSettings(): Promise<Settings>;
     getTagOptions(): Promise<Array<TagOption>>;
-    getUserName(mobile: string): Promise<string>;
-    updateColorTheme(theme: string): Promise<void>;
-    updateCustomer(userMobile: string, id: bigint, customer: Customer): Promise<boolean>;
-    updateFieldDefinitions(fields: Array<FieldDefinition>): Promise<void>;
-    updatePlan(userMobile: string, id: bigint, planData: Plan): Promise<boolean>;
-    updatePlanOptions(newOptions: Array<string>): Promise<void>;
-    updatePlanStatus(userMobile: string, id: bigint, status: string): Promise<boolean>;
-    updateSettings(newSettings: Array<string>): Promise<void>;
-    updateTagOptions(newOptions: Array<TagOption>): Promise<void>;
+    getUserName(mobile: string): Promise<string | null>;
+    updateColorTheme(theme: string): Promise<boolean>;
+    updateCustomer(mobile: string, id: string, data: CustomerData): Promise<boolean>;
+    updateFieldDefinitions(fields: Array<FieldDef>): Promise<boolean>;
+    updatePlan(mobile: string, id: string, plan: PlanData): Promise<boolean>;
+    updatePlanOptions(options: Array<PlanOption>): Promise<boolean>;
+    updatePlanStatus(mobile: string, id: string, status: string): Promise<boolean>;
+    updateSettings(s: Settings): Promise<boolean>;
+    updateTagOptions(options: Array<TagOption>): Promise<boolean>;
     verifyOtp(mobile: string, otp: string): Promise<boolean>;
 }
 import type { CustomerWithId as _CustomerWithId, PlanWithId as _PlanWithId } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
-    async addCustomer(arg0: string, arg1: Customer): Promise<bigint> {
+    async addCustomer(arg0: string, arg1: CustomerData): Promise<string> {
         if (this.processError) {
             try {
                 const result = await this.actor.addCustomer(arg0, arg1);
@@ -209,7 +193,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async addPlan(arg0: string, arg1: Plan): Promise<PlanWithId> {
+    async addPlan(arg0: string, arg1: PlanData): Promise<string> {
         if (this.processError) {
             try {
                 const result = await this.actor.addPlan(arg0, arg1);
@@ -223,24 +207,35 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async createUser(arg0: string, arg1: string, arg2: string): Promise<{
-        ok: boolean;
-        message: string;
-    }> {
+    async createUser(arg0: string, arg1: string): Promise<boolean> {
         if (this.processError) {
             try {
-                const result = await this.actor.createUser(arg0, arg1, arg2);
+                const result = await this.actor.createUser(arg0, arg1);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createUser(arg0, arg1, arg2);
+            const result = await this.actor.createUser(arg0, arg1);
             return result;
         }
     }
-    async deleteCustomer(arg0: string, arg1: bigint): Promise<boolean> {
+    async deleteAllPlans(arg0: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.deleteAllPlans(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.deleteAllPlans(arg0);
+            return result;
+        }
+    }
+    async deleteCustomer(arg0: string, arg1: string): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.deleteCustomer(arg0, arg1);
@@ -254,7 +249,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async deletePlan(arg0: string, arg1: bigint): Promise<boolean> {
+    async deletePlan(arg0: string, arg1: string): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.deletePlan(arg0, arg1);
@@ -268,20 +263,17 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async deleteUser(arg0: string, arg1: string): Promise<{
-        ok: boolean;
-        message: string;
-    }> {
+    async deleteUser(arg0: string): Promise<boolean> {
         if (this.processError) {
             try {
-                const result = await this.actor.deleteUser(arg0, arg1);
+                const result = await this.actor.deleteUser(arg0);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.deleteUser(arg0, arg1);
+            const result = await this.actor.deleteUser(arg0);
             return result;
         }
     }
@@ -313,7 +305,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getAllCustomersForAdmin(): Promise<Array<UserCustomerData>> {
+    async getAllCustomersForAdmin(): Promise<Array<[string, Array<CustomerWithId>]>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getAllCustomersForAdmin();
@@ -341,7 +333,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getAllPlansForAdmin(): Promise<Array<UserPlanData>> {
+    async getAllPlansForAdmin(): Promise<Array<[string, Array<PlanWithId>]>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getAllPlansForAdmin();
@@ -352,20 +344,6 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getAllPlansForAdmin();
-            return result;
-        }
-    }
-    async getAllUsers(): Promise<Array<string>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getAllUsers();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getAllUsers();
             return result;
         }
     }
@@ -383,7 +361,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getCustomer(arg0: string, arg1: bigint): Promise<CustomerWithId | null> {
+    async getCustomer(arg0: string, arg1: string): Promise<CustomerWithId | null> {
         if (this.processError) {
             try {
                 const result = await this.actor.getCustomer(arg0, arg1);
@@ -411,7 +389,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getFieldDefinitions(): Promise<Array<FieldDefinition>> {
+    async getFieldDefinitions(): Promise<Array<FieldDef>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getFieldDefinitions();
@@ -425,7 +403,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getPlan(arg0: string, arg1: bigint): Promise<PlanWithId | null> {
+    async getPlan(arg0: string, arg1: string): Promise<PlanWithId | null> {
         if (this.processError) {
             try {
                 const result = await this.actor.getPlan(arg0, arg1);
@@ -439,7 +417,7 @@ export class Backend implements backendInterface {
             return from_candid_opt_n2(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getPlanOptions(): Promise<Array<string>> {
+    async getPlanOptions(): Promise<Array<PlanOption>> {
         if (this.processError) {
             try {
                 const result = await this.actor.getPlanOptions();
@@ -453,21 +431,21 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getRegisteredUsers(arg0: string): Promise<Array<User>> {
+    async getRegisteredUsers(): Promise<Array<UserInfo>> {
         if (this.processError) {
             try {
-                const result = await this.actor.getRegisteredUsers(arg0);
+                const result = await this.actor.getRegisteredUsers();
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getRegisteredUsers(arg0);
+            const result = await this.actor.getRegisteredUsers();
             return result;
         }
     }
-    async getSettings(): Promise<Array<string>> {
+    async getSettings(): Promise<Settings> {
         if (this.processError) {
             try {
                 const result = await this.actor.getSettings();
@@ -495,21 +473,21 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getUserName(arg0: string): Promise<string> {
+    async getUserName(arg0: string): Promise<string | null> {
         if (this.processError) {
             try {
                 const result = await this.actor.getUserName(arg0);
-                return result;
+                return from_candid_opt_n3(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getUserName(arg0);
-            return result;
+            return from_candid_opt_n3(this._uploadFile, this._downloadFile, result);
         }
     }
-    async updateColorTheme(arg0: string): Promise<void> {
+    async updateColorTheme(arg0: string): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updateColorTheme(arg0);
@@ -523,7 +501,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateCustomer(arg0: string, arg1: bigint, arg2: Customer): Promise<boolean> {
+    async updateCustomer(arg0: string, arg1: string, arg2: CustomerData): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updateCustomer(arg0, arg1, arg2);
@@ -537,7 +515,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateFieldDefinitions(arg0: Array<FieldDefinition>): Promise<void> {
+    async updateFieldDefinitions(arg0: Array<FieldDef>): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updateFieldDefinitions(arg0);
@@ -551,7 +529,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updatePlan(arg0: string, arg1: bigint, arg2: Plan): Promise<boolean> {
+    async updatePlan(arg0: string, arg1: string, arg2: PlanData): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updatePlan(arg0, arg1, arg2);
@@ -565,7 +543,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updatePlanOptions(arg0: Array<string>): Promise<void> {
+    async updatePlanOptions(arg0: Array<PlanOption>): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updatePlanOptions(arg0);
@@ -579,7 +557,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updatePlanStatus(arg0: string, arg1: bigint, arg2: string): Promise<boolean> {
+    async updatePlanStatus(arg0: string, arg1: string, arg2: string): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updatePlanStatus(arg0, arg1, arg2);
@@ -593,7 +571,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateSettings(arg0: Array<string>): Promise<void> {
+    async updateSettings(arg0: Settings): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updateSettings(arg0);
@@ -607,7 +585,7 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async updateTagOptions(arg0: Array<TagOption>): Promise<void> {
+    async updateTagOptions(arg0: Array<TagOption>): Promise<boolean> {
         if (this.processError) {
             try {
                 const result = await this.actor.updateTagOptions(arg0);
@@ -640,6 +618,9 @@ function from_candid_opt_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Ar
     return value.length === 0 ? null : value[0];
 }
 function from_candid_opt_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_PlanWithId]): PlanWithId | null {
+    return value.length === 0 ? null : value[0];
+}
+function from_candid_opt_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [string]): string | null {
     return value.length === 0 ? null : value[0];
 }
 export interface CreateActorOptions {

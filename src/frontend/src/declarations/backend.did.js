@@ -8,86 +8,69 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const CustomField = IDL.Record({
-  'fieldName' : IDL.Text,
-  'fieldValue' : IDL.Text,
+export const CustomerData = IDL.Record({
+  'fields' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
 });
-export const Customer = IDL.Record({
-  'tag' : IDL.Text,
-  'name' : IDL.Text,
-  'mobileNumber' : IDL.Text,
-  'isHighlighted' : IDL.Bool,
-  'customFields' : IDL.Vec(CustomField),
-  'ghRga' : IDL.Text,
-  'address' : IDL.Text,
-});
-export const Plan = IDL.Record({
+export const PlanData = IDL.Record({
+  'status' : IDL.Text,
+  'dateStr' : IDL.Text,
   'name' : IDL.Text,
   'plan' : IDL.Text,
-  'dateEntry' : IDL.Text,
-  'mobileNumber' : IDL.Text,
   'installment' : IDL.Text,
-  'billRefundStatus' : IDL.Text,
-});
-export const PlanWithId = IDL.Record({
-  'id' : IDL.Nat,
-  'name' : IDL.Text,
-  'plan' : IDL.Text,
-  'dateEntry' : IDL.Text,
-  'mobileNumber' : IDL.Text,
-  'installment' : IDL.Text,
-  'daysCount' : IDL.Nat,
-  'billRefundStatus' : IDL.Text,
+  'mobile' : IDL.Text,
 });
 export const CustomerWithId = IDL.Record({
-  'id' : IDL.Nat,
-  'tag' : IDL.Text,
+  'id' : IDL.Text,
+  'fields' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+});
+export const PlanWithId = IDL.Record({
+  'id' : IDL.Text,
+  'status' : IDL.Text,
+  'dateStr' : IDL.Text,
   'name' : IDL.Text,
-  'mobileNumber' : IDL.Text,
-  'isHighlighted' : IDL.Bool,
-  'customFields' : IDL.Vec(CustomField),
-  'ghRga' : IDL.Text,
-  'address' : IDL.Text,
+  'plan' : IDL.Text,
+  'installment' : IDL.Text,
+  'daysCount' : IDL.Nat,
+  'mobile' : IDL.Text,
 });
-export const UserCustomerData = IDL.Record({
-  'userMobile' : IDL.Text,
-  'customers' : IDL.Vec(CustomerWithId),
-});
-export const UserPlanData = IDL.Record({
-  'userMobile' : IDL.Text,
-  'plans' : IDL.Vec(PlanWithId),
-});
-export const FieldDefinition = IDL.Record({
+export const FieldDef = IDL.Record({
   'id' : IDL.Text,
   'order' : IDL.Nat,
   'fieldLabel' : IDL.Text,
+  'required' : IDL.Bool,
   'fieldType' : IDL.Text,
 });
-export const User = IDL.Record({
+export const PlanOption = IDL.Record({
+  'id' : IDL.Text,
+  'optionLabel' : IDL.Text,
+  'color' : IDL.Text,
+});
+export const UserInfo = IDL.Record({
   'userName' : IDL.Text,
-  'createdAt' : IDL.Int,
   'mobile' : IDL.Text,
 });
+export const DropdownOption = IDL.Record({
+  'id' : IDL.Text,
+  'optionLabel' : IDL.Text,
+  'color' : IDL.Text,
+});
+export const Settings = IDL.Record({
+  'ghRgaOptions' : IDL.Vec(DropdownOption),
+});
 export const TagOption = IDL.Record({
-  'tagColor' : IDL.Text,
-  'tagLabel' : IDL.Text,
+  'id' : IDL.Text,
+  'optionLabel' : IDL.Text,
+  'color' : IDL.Text,
 });
 
 export const idlService = IDL.Service({
-  'addCustomer' : IDL.Func([IDL.Text, Customer], [IDL.Nat], []),
-  'addPlan' : IDL.Func([IDL.Text, Plan], [PlanWithId], []),
-  'createUser' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text],
-      [IDL.Record({ 'ok' : IDL.Bool, 'message' : IDL.Text })],
-      [],
-    ),
-  'deleteCustomer' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Bool], []),
-  'deletePlan' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Bool], []),
-  'deleteUser' : IDL.Func(
-      [IDL.Text, IDL.Text],
-      [IDL.Record({ 'ok' : IDL.Bool, 'message' : IDL.Text })],
-      [],
-    ),
+  'addCustomer' : IDL.Func([IDL.Text, CustomerData], [IDL.Text], []),
+  'addPlan' : IDL.Func([IDL.Text, PlanData], [IDL.Text], []),
+  'createUser' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'deleteAllPlans' : IDL.Func([IDL.Text], [IDL.Bool], []),
+  'deleteCustomer' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'deletePlan' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'deleteUser' : IDL.Func([IDL.Text], [IDL.Bool], []),
   'generateOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
   'getAllCustomers' : IDL.Func(
       [IDL.Text],
@@ -96,120 +79,105 @@ export const idlService = IDL.Service({
     ),
   'getAllCustomersForAdmin' : IDL.Func(
       [],
-      [IDL.Vec(UserCustomerData)],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Vec(CustomerWithId)))],
       ['query'],
     ),
   'getAllPlans' : IDL.Func([IDL.Text], [IDL.Vec(PlanWithId)], ['query']),
-  'getAllPlansForAdmin' : IDL.Func([], [IDL.Vec(UserPlanData)], ['query']),
-  'getAllUsers' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+  'getAllPlansForAdmin' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Vec(PlanWithId)))],
+      ['query'],
+    ),
   'getColorTheme' : IDL.Func([], [IDL.Text], ['query']),
   'getCustomer' : IDL.Func(
-      [IDL.Text, IDL.Nat],
+      [IDL.Text, IDL.Text],
       [IDL.Opt(CustomerWithId)],
       ['query'],
     ),
   'getCustomerCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
-  'getFieldDefinitions' : IDL.Func([], [IDL.Vec(FieldDefinition)], ['query']),
-  'getPlan' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Opt(PlanWithId)], ['query']),
-  'getPlanOptions' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
-  'getRegisteredUsers' : IDL.Func([IDL.Text], [IDL.Vec(User)], ['query']),
-  'getSettings' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+  'getFieldDefinitions' : IDL.Func([], [IDL.Vec(FieldDef)], ['query']),
+  'getPlan' : IDL.Func([IDL.Text, IDL.Text], [IDL.Opt(PlanWithId)], ['query']),
+  'getPlanOptions' : IDL.Func([], [IDL.Vec(PlanOption)], ['query']),
+  'getRegisteredUsers' : IDL.Func([], [IDL.Vec(UserInfo)], ['query']),
+  'getSettings' : IDL.Func([], [Settings], ['query']),
   'getTagOptions' : IDL.Func([], [IDL.Vec(TagOption)], ['query']),
-  'getUserName' : IDL.Func([IDL.Text], [IDL.Text], ['query']),
-  'updateColorTheme' : IDL.Func([IDL.Text], [], []),
-  'updateCustomer' : IDL.Func([IDL.Text, IDL.Nat, Customer], [IDL.Bool], []),
-  'updateFieldDefinitions' : IDL.Func([IDL.Vec(FieldDefinition)], [], []),
-  'updatePlan' : IDL.Func([IDL.Text, IDL.Nat, Plan], [IDL.Bool], []),
-  'updatePlanOptions' : IDL.Func([IDL.Vec(IDL.Text)], [], []),
-  'updatePlanStatus' : IDL.Func([IDL.Text, IDL.Nat, IDL.Text], [IDL.Bool], []),
-  'updateSettings' : IDL.Func([IDL.Vec(IDL.Text)], [], []),
-  'updateTagOptions' : IDL.Func([IDL.Vec(TagOption)], [], []),
+  'getUserName' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+  'updateColorTheme' : IDL.Func([IDL.Text], [IDL.Bool], []),
+  'updateCustomer' : IDL.Func(
+      [IDL.Text, IDL.Text, CustomerData],
+      [IDL.Bool],
+      [],
+    ),
+  'updateFieldDefinitions' : IDL.Func([IDL.Vec(FieldDef)], [IDL.Bool], []),
+  'updatePlan' : IDL.Func([IDL.Text, IDL.Text, PlanData], [IDL.Bool], []),
+  'updatePlanOptions' : IDL.Func([IDL.Vec(PlanOption)], [IDL.Bool], []),
+  'updatePlanStatus' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
+  'updateSettings' : IDL.Func([Settings], [IDL.Bool], []),
+  'updateTagOptions' : IDL.Func([IDL.Vec(TagOption)], [IDL.Bool], []),
   'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
 });
 
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
-  const CustomField = IDL.Record({
-    'fieldName' : IDL.Text,
-    'fieldValue' : IDL.Text,
+  const CustomerData = IDL.Record({
+    'fields' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
   });
-  const Customer = IDL.Record({
-    'tag' : IDL.Text,
-    'name' : IDL.Text,
-    'mobileNumber' : IDL.Text,
-    'isHighlighted' : IDL.Bool,
-    'customFields' : IDL.Vec(CustomField),
-    'ghRga' : IDL.Text,
-    'address' : IDL.Text,
-  });
-  const Plan = IDL.Record({
+  const PlanData = IDL.Record({
+    'status' : IDL.Text,
+    'dateStr' : IDL.Text,
     'name' : IDL.Text,
     'plan' : IDL.Text,
-    'dateEntry' : IDL.Text,
-    'mobileNumber' : IDL.Text,
     'installment' : IDL.Text,
-    'billRefundStatus' : IDL.Text,
-  });
-  const PlanWithId = IDL.Record({
-    'id' : IDL.Nat,
-    'name' : IDL.Text,
-    'plan' : IDL.Text,
-    'dateEntry' : IDL.Text,
-    'mobileNumber' : IDL.Text,
-    'installment' : IDL.Text,
-    'daysCount' : IDL.Nat,
-    'billRefundStatus' : IDL.Text,
+    'mobile' : IDL.Text,
   });
   const CustomerWithId = IDL.Record({
-    'id' : IDL.Nat,
-    'tag' : IDL.Text,
+    'id' : IDL.Text,
+    'fields' : IDL.Vec(IDL.Tuple(IDL.Text, IDL.Text)),
+  });
+  const PlanWithId = IDL.Record({
+    'id' : IDL.Text,
+    'status' : IDL.Text,
+    'dateStr' : IDL.Text,
     'name' : IDL.Text,
-    'mobileNumber' : IDL.Text,
-    'isHighlighted' : IDL.Bool,
-    'customFields' : IDL.Vec(CustomField),
-    'ghRga' : IDL.Text,
-    'address' : IDL.Text,
+    'plan' : IDL.Text,
+    'installment' : IDL.Text,
+    'daysCount' : IDL.Nat,
+    'mobile' : IDL.Text,
   });
-  const UserCustomerData = IDL.Record({
-    'userMobile' : IDL.Text,
-    'customers' : IDL.Vec(CustomerWithId),
-  });
-  const UserPlanData = IDL.Record({
-    'userMobile' : IDL.Text,
-    'plans' : IDL.Vec(PlanWithId),
-  });
-  const FieldDefinition = IDL.Record({
+  const FieldDef = IDL.Record({
     'id' : IDL.Text,
     'order' : IDL.Nat,
     'fieldLabel' : IDL.Text,
+    'required' : IDL.Bool,
     'fieldType' : IDL.Text,
   });
-  const User = IDL.Record({
-    'userName' : IDL.Text,
-    'createdAt' : IDL.Int,
-    'mobile' : IDL.Text,
+  const PlanOption = IDL.Record({
+    'id' : IDL.Text,
+    'optionLabel' : IDL.Text,
+    'color' : IDL.Text,
   });
+  const UserInfo = IDL.Record({ 'userName' : IDL.Text, 'mobile' : IDL.Text });
+  const DropdownOption = IDL.Record({
+    'id' : IDL.Text,
+    'optionLabel' : IDL.Text,
+    'color' : IDL.Text,
+  });
+  const Settings = IDL.Record({ 'ghRgaOptions' : IDL.Vec(DropdownOption) });
   const TagOption = IDL.Record({
-    'tagColor' : IDL.Text,
-    'tagLabel' : IDL.Text,
+    'id' : IDL.Text,
+    'optionLabel' : IDL.Text,
+    'color' : IDL.Text,
   });
   
   return IDL.Service({
-    'addCustomer' : IDL.Func([IDL.Text, Customer], [IDL.Nat], []),
-    'addPlan' : IDL.Func([IDL.Text, Plan], [PlanWithId], []),
-    'createUser' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text],
-        [IDL.Record({ 'ok' : IDL.Bool, 'message' : IDL.Text })],
-        [],
-      ),
-    'deleteCustomer' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Bool], []),
-    'deletePlan' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Bool], []),
-    'deleteUser' : IDL.Func(
-        [IDL.Text, IDL.Text],
-        [IDL.Record({ 'ok' : IDL.Bool, 'message' : IDL.Text })],
-        [],
-      ),
+    'addCustomer' : IDL.Func([IDL.Text, CustomerData], [IDL.Text], []),
+    'addPlan' : IDL.Func([IDL.Text, PlanData], [IDL.Text], []),
+    'createUser' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'deleteAllPlans' : IDL.Func([IDL.Text], [IDL.Bool], []),
+    'deleteCustomer' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'deletePlan' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'deleteUser' : IDL.Func([IDL.Text], [IDL.Bool], []),
     'generateOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
     'getAllCustomers' : IDL.Func(
         [IDL.Text],
@@ -218,38 +186,49 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getAllCustomersForAdmin' : IDL.Func(
         [],
-        [IDL.Vec(UserCustomerData)],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Vec(CustomerWithId)))],
         ['query'],
       ),
     'getAllPlans' : IDL.Func([IDL.Text], [IDL.Vec(PlanWithId)], ['query']),
-    'getAllPlansForAdmin' : IDL.Func([], [IDL.Vec(UserPlanData)], ['query']),
-    'getAllUsers' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+    'getAllPlansForAdmin' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Text, IDL.Vec(PlanWithId)))],
+        ['query'],
+      ),
     'getColorTheme' : IDL.Func([], [IDL.Text], ['query']),
     'getCustomer' : IDL.Func(
-        [IDL.Text, IDL.Nat],
+        [IDL.Text, IDL.Text],
         [IDL.Opt(CustomerWithId)],
         ['query'],
       ),
     'getCustomerCount' : IDL.Func([IDL.Text], [IDL.Nat], ['query']),
-    'getFieldDefinitions' : IDL.Func([], [IDL.Vec(FieldDefinition)], ['query']),
-    'getPlan' : IDL.Func([IDL.Text, IDL.Nat], [IDL.Opt(PlanWithId)], ['query']),
-    'getPlanOptions' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
-    'getRegisteredUsers' : IDL.Func([IDL.Text], [IDL.Vec(User)], ['query']),
-    'getSettings' : IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+    'getFieldDefinitions' : IDL.Func([], [IDL.Vec(FieldDef)], ['query']),
+    'getPlan' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Opt(PlanWithId)],
+        ['query'],
+      ),
+    'getPlanOptions' : IDL.Func([], [IDL.Vec(PlanOption)], ['query']),
+    'getRegisteredUsers' : IDL.Func([], [IDL.Vec(UserInfo)], ['query']),
+    'getSettings' : IDL.Func([], [Settings], ['query']),
     'getTagOptions' : IDL.Func([], [IDL.Vec(TagOption)], ['query']),
-    'getUserName' : IDL.Func([IDL.Text], [IDL.Text], ['query']),
-    'updateColorTheme' : IDL.Func([IDL.Text], [], []),
-    'updateCustomer' : IDL.Func([IDL.Text, IDL.Nat, Customer], [IDL.Bool], []),
-    'updateFieldDefinitions' : IDL.Func([IDL.Vec(FieldDefinition)], [], []),
-    'updatePlan' : IDL.Func([IDL.Text, IDL.Nat, Plan], [IDL.Bool], []),
-    'updatePlanOptions' : IDL.Func([IDL.Vec(IDL.Text)], [], []),
-    'updatePlanStatus' : IDL.Func(
-        [IDL.Text, IDL.Nat, IDL.Text],
+    'getUserName' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
+    'updateColorTheme' : IDL.Func([IDL.Text], [IDL.Bool], []),
+    'updateCustomer' : IDL.Func(
+        [IDL.Text, IDL.Text, CustomerData],
         [IDL.Bool],
         [],
       ),
-    'updateSettings' : IDL.Func([IDL.Vec(IDL.Text)], [], []),
-    'updateTagOptions' : IDL.Func([IDL.Vec(TagOption)], [], []),
+    'updateFieldDefinitions' : IDL.Func([IDL.Vec(FieldDef)], [IDL.Bool], []),
+    'updatePlan' : IDL.Func([IDL.Text, IDL.Text, PlanData], [IDL.Bool], []),
+    'updatePlanOptions' : IDL.Func([IDL.Vec(PlanOption)], [IDL.Bool], []),
+    'updatePlanStatus' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Bool],
+        [],
+      ),
+    'updateSettings' : IDL.Func([Settings], [IDL.Bool], []),
+    'updateTagOptions' : IDL.Func([IDL.Vec(TagOption)], [IDL.Bool], []),
     'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
   });
 };
